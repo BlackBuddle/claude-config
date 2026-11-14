@@ -21,10 +21,25 @@ if (-not (Test-Path $main) -or -not (Select-String -Path $main -SimpleMatch $imp
     Write-Host "Added import line to $main"
 }
 
-foreach ($d in 'docs', 'agents', 'skills') {
+foreach ($d in 'docs', 'agents', 'skills', 'hooks') {
     Copy-Item (Join-Path $src $d) $Target -Recurse -Force
 }
-Write-Host "Copied: CLAUDE.shared.md, docs, agents, skills -> $Target"
+
+# Register the reminder hook in settings.json. Other hooks and settings stay.
+$sp = Join-Path $Target 'settings.json'
+$s = if (Test-Path $sp) { Get-Content $sp -Raw -Encoding UTF8 | ConvertFrom-Json } else { New-Object psobject }
+if ((ConvertTo-Json $s -Depth 30) -notmatch 'reminder\.txt') {
+    if (Test-Path $sp) { Copy-Item $sp "$sp.bak-setup" -Force }
+    $cmd = "powershell -NoProfile -Command `"Get-Content -Raw '" + ($Target -replace '\\', '/') + "/hooks/reminder.txt'`""
+    $entry = @{ hooks = @(@{ type = 'command'; command = $cmd; timeout = 10 }) }
+    if (-not $s.hooks) { $s | Add-Member -NotePropertyName hooks -NotePropertyValue (New-Object psobject) }
+    $list = @($s.hooks.UserPromptSubmit | Where-Object { $_ }) + $entry
+    $s.hooks | Add-Member -NotePropertyName UserPromptSubmit -NotePropertyValue $list -Force
+    # WriteAllText: no BOM. Set-Content -Encoding utf8 would add one in PowerShell 5.1.
+    [IO.File]::WriteAllText($sp, (ConvertTo-Json $s -Depth 30))
+    Write-Host "Added reminder hook to $sp"
+}
+Write-Host "Copied: CLAUDE.shared.md, docs, agents, skills, hooks -> $Target"
 
 if (-not $SkipPlugins) {
     if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {

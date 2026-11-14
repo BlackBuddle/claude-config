@@ -1,0 +1,4 @@
+Reminder from the user's own hook: follow ~/.claude/CLAUDE.md in this turn.
+1) Design or motion request: choose one skill with the design skill selection table in ~/.claude/docs, name it on the first line, and invoke it yourself (also the ones that were slash-command only).
+2) Long file, log or search result (300+ lines or several files): delegate the reading to the summarizer agent.
+3) When a work item is finished: propose one review command from the review selection table in ~/.claude/docs. Run it only after the user approves.
