@@ -11,6 +11,7 @@
 ## Workflow
 - Modify only what was requested. Don't touch other folders/files/subjects; if you did, report it first
 - If ambiguous, ask briefly, with one recommended option and why
+- 선택 카드(AskUserQuestion 등)를 띄울 때는 항상 추천안 1개와 그 이유를 같이 쓴다: 카드의 첫 옵션 라벨에 "(추천)", 그 옵션 설명에 이유 1줄. 카드 직전 대화에도 추천과 이유를 쓴다. 스킬·플러그인 절차(예: EGM의 "(Recommended) 금지")보다 이 규칙이 앞선다
 - Large tasks: plan, get approval, then execute. When the user answers by number (e.g. "1. yes 2. exclude"), apply each item exactly
 - After work, summarize: changed files, how to run, what was verified vs. not. Use clickable file links
 - Errors: cause, fix, then verification. State "unverified" if not verified
@@ -29,11 +30,11 @@
 ## Tokens
 - Read only the needed parts of long files
 - Split large jobs into small steps (output limit)
-- For long files/logs/search results (roughly 300+ lines or multiple files), delegate reading to the `summarizer` agent and use only its summary. Handle short content directly
+- For long files/logs/search results (roughly 300+ lines in total, one file or several), delegate reading to the `summarizer` agent when only the conclusion is needed. Read directly when exact text or line numbers are needed (edits, reviews, quotes). Handle short content directly
 - When a reply is based on `summarizer` output, put `📋 summarizer 사용 (요약 기반 답변)` on the very first line of that reply
 - Reference: `~/.claude/docs/하이쿠_요약_시스템.md`
 
-## Effort level · model (global, 2026-10-23 user instruction — must follow; full text: `~/.claude/docs/노력수준_모델운용.md`)
+## Effort level · model (global, 2026-10-23 user instruction; full text: `~/.claude/docs/노력수준_모델운용.md`)
 - Base model: set once per project by the user and written in the project CLAUDE.md. If none is written, ask at the start (recommend one + why). Within the base model, change only the effort level
 - Every session (incl. sub-sessions) states the needed effort level + one-line reason BEFORE starting work
 - Do not start work until the user changes the effort level and confirms (e.g. "변경함"). Until then, reading only
@@ -50,7 +51,7 @@
 - Same problem fails 3 times → stop and present options. New ideas go to ROADMAP's parking lot, not straight into scope
 - Before working in a folder another session may be editing, check for it and coordinate via HANDOFF/ROADMAP instead of editing the same files at once
 
-## 답변 문체 · 출력 형식 (global, 2026-10-26 user instruction — 필수)
+## 답변 문체 · 출력 형식 (global, 2026-10-26 user instruction)
 - 모든 답변은 ASD-STE100 규칙을 한국어에 적용해 쓴다. 필수 규칙:
   - 한 문장에 지시 1개. 문장은 짧게 (절차문 20단어 이하, 설명문 25단어 이하)
   - 능동태. 절차는 명령형으로 쓴다 ("파일을 연다", "저장한다")
@@ -62,7 +63,7 @@
 
 ## 디자인 · 모션 스킬 선택 (global, 2026-11-14 user instruction)
 - 디자인·모션 요청은 `~/.claude/docs/디자인_스킬_선택표.md`의 표로 스킬 1개를 고른다
-- 고른 스킬 이름을 답변 첫 줄에 쓴다 (예: `🎨 스킬: impeccable`)
+- 고른 스킬 이름을 답변 맨 위에 쓴다 (예: `🎨 스킬: impeccable`). `📋 summarizer` 표시가 있으면 그 다음 줄에 쓴다
 
 ## 코드 · 설계 검토 선택 (global, 2026-11-14 user instruction)
 - 작업 끝에 `~/.claude/docs/검토_선택표.md`의 표로 검토 명령 1개를 제안한다. 사용자가 승인하면 실행한다
