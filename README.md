@@ -1,4 +1,4 @@
-# claude-config
+﻿# claude-config
 
 Claude Code 개인 설정 묶음. 다른 컴퓨터에 같은 환경을 만든다.
 
@@ -7,7 +7,7 @@ Claude Code 개인 설정 묶음. 다른 컴퓨터에 같은 환경을 만든다
 | 경로 | 내용 |
 |---|---|
 | `CLAUDE.md` | 전역 지시문 |
-| `docs/` | 노력 수준, 작업 방식, 요약 시스템, 디자인 스킬 선택표 |
+| `docs/` | 노력 수준, 작업 방식, 요약 시스템, 디자인 스킬 선택표, 검토 선택표 |
 | `agents/summarizer.md` | 요약 에이전트 |
 | `skills/stageshow/` | 로컬 스킬 (계정에 올리면 이 사본은 필요 없다) |
 | `setup.ps1` | 설치 스크립트 |
@@ -28,7 +28,7 @@ Claude Code 개인 설정 묶음. 다른 컴퓨터에 같은 환경을 만든다
 - 그 컴퓨터만의 규칙은 `CLAUDE.md`에 쓴다. 공통 규칙은 이 저장소의 `CLAUDE.md`에서 고친다.
 - 두 파일에 같은 규칙이 있으면 `CLAUDE.md` 쪽을 지워 다듬는다.
 
-그 뒤 `docs`, `agents`, `skills`를 `~/.claude`에 복사한다. 마지막으로 `ponytail`과 `frontend-design` 플러그인을 설치한다.
+그 뒤 `docs`, `agents`, `skills`를 `~/.claude`에 복사한다. 마지막으로 `ponytail`, `frontend-design`, `egm` 플러그인을 설치한다.
 
 새 컴퓨터의 Claude Code에 "Dawnilove/claude-config 저장소를 받아 README대로 설치해 줘"라고 말해도 된다.
 

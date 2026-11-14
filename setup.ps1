@@ -35,5 +35,7 @@ if (-not $SkipPlugins) {
     claude plugin marketplace add DietrichGebert/ponytail
     claude plugin install ponytail@ponytail
     claude plugin install frontend-design@claude-plugins-official
+    claude plugin marketplace add google/elephant-goldfish-model
+    claude plugin install egm@egm
 }
 Write-Host 'Done. Restart Claude Code.'
