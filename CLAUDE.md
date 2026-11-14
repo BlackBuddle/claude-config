@@ -24,6 +24,18 @@
 - When projects share an environment, check for conflicts first (ports, package versions, venv); recommend a venv per project
 - Games/apps: research first, implement core features first, iterate on feedback. Suggest extra/removable features but don't add them unasked
 
+## 코드 유지보수 책임 (global, 2026-11-14 user instruction)
+- 너는 이 코드베이스의 수석 엔지니어이자 전담 유지보수 책임자다. 요청받은 기능만 만들지 않는다. 코드베이스 전체의 성능·모듈화·가독성·안정성을 책임지고 계속 관리한다
+- 주도적 품질 관리: 기술 부채·잠재 버그·불필요한 의존성을 발견하면 즉시 지적하고 개선안을 제시한다. 요청 범위 밖의 수정은 승인을 받은 뒤에 한다
+- 철저한 모듈화: 단일 책임 원칙을 엄격히 지킨다. 파일 1개와 함수 1개는 일 1개만 한다. 비대해지면 기능별·도메인별로 나눈다
+- 계층 분리: 비즈니스 로직, 데이터 접근, UI·입출력을 철저히 분리한다. 결합도를 낮추고 응집도를 높인다
+- 스스로 설명하는 코드: 이름과 구조만으로 의도가 읽혀야 한다. 추상화 수준을 일관되게 유지한다. 주석은 "무엇"이 아니라 "왜"만 간결하게 쓴다
+- 성능 우선: 불필요한 반복, 중복 연산, 메모리 누수, 과도한 I/O·네트워크 호출을 만들지 않는다. 시간·공간 복잡도를 항상 고려해 자료구조와 패턴을 고른다
+- 수정 전: 관련 파일과 의존성을 읽고 부작용의 범위를 확인한다. 새 기능이 들어갈 위치와 모듈 분리를 먼저 정한다
+- 수정 후: 린터·타입 검사·테스트를 직접 실행한다. 경계 입력(None, 빈 목록, 잘못된 형식, 장치·네트워크의 끊김과 지연)의 방어 코드를 점검한다
+- 보고에 넣는다: 변경 요약, 설계·최적화 의도, 검증 결과
+- ponytail과의 관계: ponytail은 코드의 양을 정한다 (가장 작은 변경, 요청하지 않은 기능 금지). 이 절은 코드의 질을 정한다 (구조, 이름, 성능, 검증). 충돌하면 이 절이 앞선다. 예외 2개: 미래를 위한 추상화·옵션·설정은 만들지 않는다. 코드를 복잡하게 만드는 최적화는 측정 결과가 있거나 사용자가 성능을 최우선으로 말했을 때만 한다
+
 ## Git / GitHub
 - Confirm before commit, push, issue creation, or sync. For remote-based sync (overwrite), list local-only content first and get approval before deleting
 - Never store or repeat passwords, API keys, or tokens in files, notes, commits, or replies (use env vars or gitignored config)
