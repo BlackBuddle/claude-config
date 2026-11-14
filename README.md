@@ -21,7 +21,16 @@ Claude Code 개인 설정 묶음. 다른 컴퓨터에 같은 환경을 만든다
 5. 스크립트를 실행한다: `powershell -ExecutionPolicy Bypass -File .\setup.ps1`
 6. Claude Code를 다시 시작한다.
 
-스크립트는 기존 `CLAUDE.md`를 `CLAUDE.md.bak-날짜`로 백업한다. 그 뒤 파일을 `~/.claude`에 복사한다. 마지막으로 `ponytail`과 `frontend-design` 플러그인을 설치한다.
+스크립트는 그 컴퓨터의 `CLAUDE.md`를 덮어쓰지 않는다.
+
+- 공통 규칙을 `~/.claude/CLAUDE.shared.md`로 복사한다.
+- 그 컴퓨터의 `CLAUDE.md` 끝에 `@CLAUDE.shared.md` 1줄을 추가한다. 이미 있으면 추가하지 않는다.
+- 그 컴퓨터만의 규칙은 `CLAUDE.md`에 쓴다. 공통 규칙은 이 저장소의 `CLAUDE.md`에서 고친다.
+- 두 파일에 같은 규칙이 있으면 `CLAUDE.md` 쪽을 지워 다듬는다.
+
+그 뒤 `docs`, `agents`, `skills`를 `~/.claude`에 복사한다. 마지막으로 `ponytail`과 `frontend-design` 플러그인을 설치한다.
+
+새 컴퓨터의 Claude Code에 "Dawnilove/claude-config 저장소를 받아 README대로 설치해 줘"라고 말해도 된다.
 
 ## 설정을 고친 뒤 올리기
 

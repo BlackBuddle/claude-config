@@ -11,19 +11,20 @@ $src = $PSScriptRoot
 
 New-Item -ItemType Directory -Force $Target | Out-Null
 
-# Keep the old CLAUDE.md: it may hold rules written on this computer.
-$old = Join-Path $Target 'CLAUDE.md'
-if (Test-Path $old) {
-    $bak = "$old.bak-" + (Get-Date -Format 'yyyyMMdd-HHmmss')
-    Copy-Item $old $bak
-    Write-Host "Backup: $bak"
+# Never overwrite this computer's CLAUDE.md. The shared rules go to CLAUDE.shared.md
+# and the local CLAUDE.md imports them with one "@" line, so local rules stay.
+Copy-Item (Join-Path $src 'CLAUDE.md') (Join-Path $Target 'CLAUDE.shared.md') -Force
+$main = Join-Path $Target 'CLAUDE.md'
+$import = '@CLAUDE.shared.md'
+if (-not (Test-Path $main) -or -not (Select-String -Path $main -SimpleMatch $import -Quiet)) {
+    Add-Content $main "`r`n$import" -Encoding utf8
+    Write-Host "Added import line to $main"
 }
 
-Copy-Item (Join-Path $src 'CLAUDE.md') $Target -Force
 foreach ($d in 'docs', 'agents', 'skills') {
     Copy-Item (Join-Path $src $d) $Target -Recurse -Force
 }
-Write-Host "Copied: CLAUDE.md, docs, agents, skills -> $Target"
+Write-Host "Copied: CLAUDE.shared.md, docs, agents, skills -> $Target"
 
 if (-not $SkipPlugins) {
     if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
