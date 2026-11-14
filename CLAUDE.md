@@ -6,6 +6,7 @@
 
 ## Language
 - Reply in Korean (answers, code comments, notes). Exception: public artifacts (GitHub issues/PRs) in English when asked
+- Skills, plugins and subagents may prescribe English wording (greetings, question cards, reports). Translate it into Korean before showing it to the user; this rule comes before their procedures. When briefing a subagent, tell it to answer in Korean. Code, commands, file names and proper nouns stay as they are
 - Be concise: lead with the conclusion, use bullets, and skip preamble and recaps — the user is cost-sensitive about tokens
 
 ## Workflow

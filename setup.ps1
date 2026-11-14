@@ -28,16 +28,25 @@ foreach ($d in 'docs', 'agents', 'skills', 'hooks') {
 # Register the reminder hook in settings.json. Other hooks and settings stay.
 $sp = Join-Path $Target 'settings.json'
 $s = if (Test-Path $sp) { Get-Content $sp -Raw -Encoding UTF8 | ConvertFrom-Json } else { New-Object psobject }
+$changed = $false
+# Response language. An existing value (any language) is kept.
+if (-not $s.language) {
+    $s | Add-Member -NotePropertyName language -NotePropertyValue 'korean'
+    $changed = $true
+}
 if ((ConvertTo-Json $s -Depth 30) -notmatch 'reminder\.txt') {
-    if (Test-Path $sp) { Copy-Item $sp "$sp.bak-setup" -Force }
+    $changed = $true
     $cmd = "powershell -NoProfile -Command `"Get-Content -Raw '" + ($Target -replace '\\', '/') + "/hooks/reminder.txt'`""
     $entry = @{ hooks = @(@{ type = 'command'; command = $cmd; timeout = 10 }) }
     if (-not $s.hooks) { $s | Add-Member -NotePropertyName hooks -NotePropertyValue (New-Object psobject) }
     $list = @($s.hooks.UserPromptSubmit | Where-Object { $_ }) + $entry
     $s.hooks | Add-Member -NotePropertyName UserPromptSubmit -NotePropertyValue $list -Force
+}
+if ($changed) {
+    if (Test-Path $sp) { Copy-Item $sp "$sp.bak-setup" -Force }
     # WriteAllText: no BOM. Set-Content -Encoding utf8 would add one in PowerShell 5.1.
     [IO.File]::WriteAllText($sp, (ConvertTo-Json $s -Depth 30))
-    Write-Host "Added reminder hook to $sp"
+    Write-Host "Updated $sp (reminder hook, language)"
 }
 Write-Host "Copied: CLAUDE.shared.md, docs, agents, skills, hooks -> $Target"
 

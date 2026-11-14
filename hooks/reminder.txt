@@ -2,3 +2,4 @@ Reminder from the user's own hook: follow ~/.claude/CLAUDE.md in this turn.
 1) Design or motion request: choose one skill with the design skill selection table in ~/.claude/docs, name it at the top of the reply (below the summarizer mark if there is one), and invoke it yourself.
 2) Long file, log or search result (300+ lines in total, one file or several) where only the conclusion is needed: delegate the reading to the summarizer agent. Read directly when exact text or line numbers are needed (edits, reviews, quotes).
 3) When a work item is finished: propose one review command from the review selection table in ~/.claude/docs, with the effort level it needs. Run it only after the user approves.
+4) Reply in Korean. If a skill, plugin or subagent gives English wording, translate it before showing it. Code, commands and names stay as they are.
