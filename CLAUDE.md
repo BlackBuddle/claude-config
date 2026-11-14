@@ -58,9 +58,10 @@
 - If the base model is not enough, do it in a separate session on another model, return results as a file, then come back. When creating a sub-session, state its model and effort level. Set subagent effort per task
 
 ## Work method (global, 2026-10-23 user instruction; full text: `~/.claude/docs/통합_작업방식.md`)
-- Projects run on plan docs + per-stage sessions: PLAN.md (fixed plan) · ROADMAP.md (progress) · HANDOFF.md (handoff, latest only) · docs/결정_기록.md (user decisions, verbatim) in the project root. One source of truth per fact
+- Projects run on plan docs + per-stage sessions: PLAN.md (the design document; size M/L gets one EGM review before implementation) · ROADMAP.md (progress) · HANDOFF.md (handoff, latest only) · docs/결정_기록.md (user decisions, verbatim) in the project root. One source of truth per fact
 - New project or no PLAN.md yet: follow section 2 (plan first, pick size S/M/L, write it in the project CLAUDE.md). Existing project: start each work session with section 4 (read HANDOFF → ROADMAP stage → recent decisions → only the needed PLAN sections; check git state)
 - Keep sessions short: split per the section 5 checklist and hand off with HANDOFF.md (section 8 template). Docs, not chat history, carry memory
+- Show the session plan and the needed effort level in one message; one "변경함" approves both
 - Same problem fails 3 times → stop and present options. New ideas go to ROADMAP's parking lot, not straight into scope
 - Before working in a folder another session may be editing, check for it and coordinate via HANDOFF/ROADMAP instead of editing the same files at once
 
@@ -80,4 +81,4 @@
 
 ## 코드 · 설계 검토 선택 (global, 2026-11-14 user instruction)
 - 작업 끝에 `~/.claude/docs/검토_선택표.md`의 표로 검토 명령 1개를 제안한다. 제안하기 전에 이 표 파일을 읽는다. 기억으로 제안하지 않는다. 표의 답이 "검토하지 않는다"이면 그 답을 쓴다. 같은 세션에서 이미 읽었으면 다시 읽지 않는다. 사용자가 승인하면 실행한다. 사용자가 "묻지 말라"고 해도 이 제안 1줄은 쓴다
-- 설계 문서가 절대 기준이다. 설계 문서가 코드보다 낡았으면 멈추고 사용자에게 재확인받은 뒤 문서 갱신을 요청한다
+- 우선순위: 사용자의 최신 결정(`docs/결정_기록.md`) > 설계 문서(`PLAN.md`) > 코드·ROADMAP·HANDOFF. 결정이 설계 문서를 바꾸면 같은 세션에서 설계 문서를 고친다. 설계 문서가 코드보다 낡았으면 멈추고 사용자에게 재확인받은 뒤 문서 갱신을 요청한다
