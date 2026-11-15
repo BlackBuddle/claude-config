@@ -57,6 +57,8 @@ gh repo clone Dawnilove/claude-config "$env:USERPROFILE\claude-config"; powershe
 
 저장소에 새 커밋이 올라온 뒤에 실행한다. 플러그인은 다시 설치하지 않는다.
 
+주의: 이 명령은 저장소 폴더(`%USERPROFILE%\claude-config`)가 이미 있어야 작동한다. 그 컴퓨터에서 2-2절의 설치를 한 번도 하지 않았으면 2-2절의 명령을 먼저 실행한다. 폴더가 없으면 `fatal: cannot change to '...\claude-config': No such file or directory` 오류가 난다. 이 오류는 아무것도 바꾸지 않는다.
+
 ```powershell
 git -C "$env:USERPROFILE\claude-config" pull; powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\claude-config\setup.ps1" -SkipPlugins
 ```
@@ -124,6 +126,9 @@ Claude Code에 "전역 설정을 claude-config 저장소에 올려 줘"라고 �
 
 | 증상 | 원인과 해결 |
 |---|---|
+| `fatal: cannot change to '...\claude-config'`가 나온다. `setup.ps1`이 없다고 나온다 | 그 컴퓨터에 저장소 폴더가 없다. 3절의 갱신 명령 대신 2-2절의 설치 명령을 실행한다. 다음부터 3절의 명령을 쓴다 |
+| `gh`를 찾을 수 없다 | GitHub CLI가 없다. `winget install GitHub.cli`로 설치한다. PowerShell을 다시 연다 |
+| 저장소를 받을 때 로그인을 요구한다. 저장소를 찾을 수 없다고 나온다 | 저장소가 비공개다. `gh auth login`으로 저장소 주인의 계정에 로그인한다 |
 | `git push`가 거절된다 | 다른 곳에서 먼저 올렸다. `git pull --rebase`를 실행한 뒤 다시 올린다 |
 | 계정 스킬이 안 보인다 | 데스크톱 앱에 같은 계정으로 로그인했는지 확인한다. 앱을 다시 시작한다 |
 | 규칙이 적용되지 않는다 | Claude Code를 다시 시작한다. 규칙은 새 세션부터 적용된다 |
