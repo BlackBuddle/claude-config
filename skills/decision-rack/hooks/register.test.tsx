@@ -53,14 +53,14 @@ function fakeQueue(on: On, files: Record<string, string>) {
   on('session.root', () => ({ value: '/Proj' }))
   on('session.messages', () => ({ value: transcript as never }))
   // 앱 세션의 환경 변수. parent는 이 세션을 띄운 부모 세션의 번호다 (앱이 연 세션에는 없다)
-  const env: { parent?: string } = {}
+  const env: { parent?: string; home?: string } = {}
   on('env.get', (_, e) => ({
     value:
       e.name === 'CLAUDE_CODE_HOST_SESSION_ID'
         ? 'local_abc'
         : e.name === 'CLAUDE_CODE_SESSION_ID'
           ? env.parent
-          : 'C:/Users/x',
+          : (env.home ?? 'C:/Users/x'),
   }))
   on('ui.open', (_, e) => {
     opened.push(`open:${e.columns}`)
@@ -99,7 +99,7 @@ function fakeQueue(on: On, files: Record<string, string>) {
   })
   on('process.run', (_, e) => {
     // 프로젝트를 찾는 git 호출은 세지 않는다
-    if (e.argv[0] === 'rundll32') ran.push([...e.argv])
+    if (e.argv[0] === 'rundll32' || e.argv[0] === 'cmd') ran.push([...e.argv])
 
     return { value: { exitCode: 0, stdout: '', stderr: '' } as never }
   })
@@ -615,3 +615,40 @@ test('알림 칸의 닫기를 누르면 그 칸을 닫는다. 결재 칸과 확�
   expect(await ui.find({ type: 'Button', key: 'dddd0000-wait:close' })).toBeFalsy()
   await ui.unmount()
 })
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+test('세션 시작 때 7일 넘게 닫혀 있던 칸 파일만 지운다', async ($, on) => {
+  const { ran, time } = fakeQueue(on, {
+    'aaaa1111-wait.json': unitText({ state: 'closed' }),
+    'aaaa1111-report.json': unitText({ state: 'closed', kind: 'report', question: undefined, lines: ['a'] }),
+    'bbbb1111-wait.json': unitText({ state: 'waiting' }),
+    'cccc1111-wait.json': '{ 깨진 파일',
+  })
+  // 파일의 수정 시각은 1~4 ms다. 지금을 8일 뒤로 둔다
+  time.now = 8 * DAY_MS
+  await $.session.start(START)
+  const dir = 'C:\\Users\\x\\.claude\\decisions\\v2'
+  expect(ran).toEqual([
+    ['cmd', '/c', 'del', '/q', `${dir}\\aaaa1111-wait.json`, `${dir}\\aaaa1111-report.json`],
+  ])
+  await (await $.ui.mount({ ...PANE, surface: 'desktop' })).unmount()
+})
+
+test('cmd 특수 글자가 든 경로는 지우지 않는다', async ($, on) => {
+  const { ran, time, env } = fakeQueue(on, { 'aaaa2222-wait.json': unitText({ state: 'closed' }) })
+  env.home = 'C:/Users/a&b'
+  time.now = 8 * DAY_MS
+  await $.session.start(START)
+  expect(ran).toEqual([])
+  await (await $.ui.mount({ ...PANE, surface: 'desktop' })).unmount()
+})
+
+test('닫힌 지 7일이 안 된 칸은 지우지 않는다', async ($, on) => {
+  const { ran, time } = fakeQueue(on, { 'aaaa3333-wait.json': unitText({ state: 'closed' }) })
+  time.now = 6 * DAY_MS
+  await $.session.start(START)
+  expect(ran).toEqual([])
+  await (await $.ui.mount({ ...PANE, surface: 'desktop' })).unmount()
+})
+

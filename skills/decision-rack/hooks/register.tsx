@@ -13,6 +13,7 @@ import {
   patchFile,
   projectKey,
   readUnit,
+  cleanClosed,
   refresh,
   setState,
   sync,
@@ -99,6 +100,7 @@ export const register: Register = on => {
     }
     if (!hasPollTimer) {
       hasPollTimer = true
+      await cleanClosed($).catch(() => undefined)
       $.clock.every(POLL_MS, () => {
         if (isRefreshing) return
         isRefreshing = true

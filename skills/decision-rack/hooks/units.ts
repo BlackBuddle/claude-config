@@ -199,3 +199,18 @@ export function rackFirst<T extends { plugin: string }>(rows: readonly T[]): T[]
 
   return [...rows.filter(isMine), ...rows.filter(row => !isMine(row))]
 }
+
+// 대기열 폴더에서 읽은 파일 1개: 수정 시각, 크기, 해석한 칸
+export type CachedFile = { mtimeMs: number; size: number; unit: Decision }
+
+// 지워도 되는 파일: 닫혔고(closed), 읽을 수 있고, 마지막으로 바뀐 지 keepMs가 지났다
+export function staleClosedNames(
+  files: ReadonlyMap<string, CachedFile>,
+  now: number,
+  keepMs: number,
+): string[] {
+  return [...files.entries()]
+    .filter(([, file]) => file.unit.state === 'closed' && !file.unit.isBroken && now - file.mtimeMs > keepMs)
+    .map(([name]) => name)
+}
+

@@ -12,8 +12,9 @@ import {
   parseDecision,
   patchDecisionText,
   slashed,
+  staleClosedNames,
 } from './units'
-import type { UnitFile } from './units'
+import type { CachedFile, UnitFile } from './units'
 
 // 대기열 폴더(~/.claude/decisions/v2)의 읽기·쓰기, 이 세션의 칸 판정, 새 칸의 알림
 
@@ -28,6 +29,10 @@ export const OPEN_AUTO = ''
 const QUEUE_SUFFIX = '/.claude/decisions/v2'
 // 패널은 이 이름 모양의 파일만 읽는다. 세션마다 기다림 칸 1개와 확인 칸 1개다 (Q5)
 const UNIT_FILE = /^[0-9a-f]{8}-(wait|report)\.json$/
+// 닫힌 칸 파일을 남겨 두는 기간 (PLAN 13절의 shortcut을 2026-11-16에 구현)
+const CLOSED_KEEP_MS = 7 * 24 * 60 * 60 * 1000
+// del에 넘기는 경로가 쓸 수 있는 글자. cmd의 특수 글자는 들어가지 않는다
+const SAFE_PATH = /^[A-Za-z]:\\[\w .\-\\]+$/
 // 데스크톱 앱이 세션을 여는 주소. 이 값을 OS에 넘기므로 파일의 값이 정확히 이 형식일 때만 쓴다
 const SESSION_LINK = 'claude://claude.ai/epitaxy/'
 
@@ -47,7 +52,7 @@ export function markTerminal(value: boolean): void {
   isTerminal = value
 }
 // 파일마다 마지막으로 읽은 내용. 수정 시각과 크기가 같으면 다시 읽지 않는다
-const parsedFiles = new Map<string, { stamp: string; unit: Decision }>()
+const parsedFiles = new Map<string, CachedFile>()
 // 이미 알린 기다림 (id:raisedAt). 같은 기다림으로 패널을 2번 열지 않는다
 const announcedKeys = new Set<string>()
 
@@ -132,7 +137,7 @@ export async function setState(
 
 // 다른 세션 안에서 띄운 세션인가 (예: 앱 세션의 Bash가 실행한 claude -p)
 // 부모는 자기 세션 번호를 CLAUDE_CODE_SESSION_ID로 물려준다. 앱이 연 세션에는 이 값이 없다 (2026-11-15 실제 확인)
-export function isNestedSession(parentId: string | undefined, sessionId: string): boolean {
+function isNestedSession(parentId: string | undefined, sessionId: string): boolean {
   return parentId !== undefined && parentId !== '' && parentId !== sessionId
 }
 
@@ -219,11 +224,10 @@ export async function refresh($: EngineInterface, isForced = false): Promise<voi
     const list = await Promise.all(
       files.map(async f => {
         const path = `${dir}/${f.name}`
-        const stamp = `${f.mtimeMs}:${f.size}`
         const cached = parsedFiles.get(f.name)
-        if (cached?.stamp === stamp) return cached.unit
+        if (cached?.mtimeMs === f.mtimeMs && cached.size === f.size) return cached.unit
         const unit = parseDecision(path, await $.fs.read(path).catch(() => ''))
-        parsedFiles.set(f.name, { stamp, unit })
+        parsedFiles.set(f.name, { mtimeMs: f.mtimeMs, size: f.size, unit })
 
         return unit
       }),
@@ -238,3 +242,17 @@ export async function refresh($: EngineInterface, isForced = false): Promise<voi
     await update($, units, () => [brokenUnit(dir, String(error))])
   }
 }
+
+// 7일 넘게 닫혀 있던 칸 파일을 지운다. 세션이 시작할 때 1번 부른다. 실패하면 다음 시작 때 다시 한다
+// $.fs에는 지우기가 없다. 그래서 cmd의 del을 쓴다. 셸 문자열을 만들지 않고 인자로 넘긴다
+// cmd 특수 글자(& | ^ % ! < > ")가 든 경로는 지우지 않는다 (명령 주입을 막는다)
+// shortcut: Windows 전용이다. 다른 OS에서는 cmd가 없어 조용히 건너뛴다
+export async function cleanClosed($: EngineInterface): Promise<void> {
+  const dir = (await queueDir($)).replace(/\//g, '\\')
+  const names = staleClosedNames(parsedFiles, await $.clock.now(), CLOSED_KEEP_MS)
+  const paths = names.map(name => `${dir}\\${name}`).filter(path => SAFE_PATH.test(path))
+  if (paths.length === 0) return
+  await $.process.run(['cmd', '/c', 'del', '/q', ...paths]).catch(() => undefined)
+  for (const name of names) parsedFiles.delete(name)
+}
+
