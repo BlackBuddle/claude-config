@@ -9,6 +9,8 @@ const POLL_MS = 5000
 const OPEN_AUTO = ''
 const OPTION_HOTKEYS = ['a', 's', 'd']
 const QUEUE_SUFFIX = '/.claude/decisions'
+// 더블 클릭의 두 번째 클릭을 이동으로 다루지 않는다
+const DOUBLE_CLICK_MS = 500
 // 데스크톱 앱이 세션을 여는 주소. 이 값을 OS에 넘기므로 파일의 값이 정확히 이 형식일 때만 쓴다
 const SESSION_LINK = 'claude://claude.ai/epitaxy/'
 const SESSION_LINK_FORMAT = /^claude:\/\/claude\.ai\/epitaxy\/local_[0-9a-f-]+$/
@@ -93,6 +95,16 @@ function openUnitId(
   )?.id
 }
 
+function pendingOf(list: Decision[]): Decision[] {
+  return list.filter(unit => unit.answer === '' && !unit.isBroken)
+}
+
+function kindLabel(unit: Decision): string {
+  if (unit.isBroken) return '오류'
+
+  return unit.isBlocking ? '결정 요청' : '확인 요청'
+}
+
 function isMine(unit: Decision, sessionId: string): boolean {
   return unit.session === sessionId && unit.answer !== '' && !unit.isDelivered
 }
@@ -160,6 +172,17 @@ async function queueFile($: EngineInterface, call: unknown): Promise<string | un
 
   return path.toLowerCase().startsWith(dir) && path.endsWith('.json') ? path : undefined
 }
+
+// 패널의 Link는 claude:// 주소를 열지 않는다. 그래서 OS의 주소 처리기로 연다
+// shortcut: Windows 전용이다. 다른 OS를 쓰게 되면 open/xdg-open을 더한다
+async function openSessionLink($: EngineInterface, link: string): Promise<void> {
+  await $.process.run(['rundll32', 'url.dll,FileProtocolHandler', link])
+}
+
+// Client(slot.tsx)를 그리지 못하는 화면에서는 제목 버튼으로 대신한다
+let hasClientFault = false
+// 방금 편 칸과 그 시각. 접힌 칸을 더블 클릭해도 이동하지 않게 한다
+let lastOpened = { id: '', at: 0 }
 
 async function patchFile(
   $: EngineInterface,
@@ -273,12 +296,40 @@ export const register: Register = on => {
       : { deny: '결정 파일은 고치지 않는다. Write로 새로 쓴다. 답은 사용자가 결정 랙 패널에서 고른다.' },
   )
 
+  // 칸의 윗부분(slot.tsx)을 눌렀다: 접힌 칸은 편다. 펴진 칸은 그 결정을 올린 세션으로 이동한다
+  on('ui.message', async ($, e, next) => {
+    const id = (e.data as { id?: unknown } | null)?.id
+    const list = await read($, units)
+    const unit = list.find(one => one.id === id)
+    if (unit) {
+      const open = openUnitId(await read($, openId), pendingOf(list), await $.session.id())
+      const now = await $.clock.now()
+      const isDoubleClick = lastOpened.id === unit.id && now - lastOpened.at < DOUBLE_CLICK_MS
+      if (open !== unit.id) {
+        await update($, openId, () => unit.id)
+        lastOpened = { id: unit.id, at: now }
+      } else if (unit.link !== '' && !isDoubleClick) {
+        await openSessionLink($, unit.link)
+      }
+    }
+
+    return next(e)
+  })
+
+  on('ui.fault', ($, e, next) => {
+    hasClientFault = true
+
+    return next(e)
+  })
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button } = $.ui.resolve(e)
+    const table = $.ui.resolve(e)
+    const { Box, Text, Button } = table
+    const Client = !hasClientFault && 'Client' in table ? table.Client : undefined
     const list = await read($, units)
     const sessionId = await $.session.id()
     const project = await projectKey($)
-    const pending = list.filter(unit => unit.answer === '' && !unit.isBroken)
+    const pending = pendingOf(list)
     const open = openUnitId(await read($, openId), pending, sessionId)
     const own = list.filter(unit => unit.root !== '' && unit.root === project)
     const others = list.filter(unit => !own.includes(unit))
@@ -303,13 +354,6 @@ export const register: Register = on => {
       )
       await refresh($, true)
     }
-
-    const open1 = (unit: Decision) => () => update($, openId, () => unit.id)
-
-    // 패널의 Link는 claude:// 주소를 열지 않는다. 그래서 OS의 주소 처리기로 연다
-    // shortcut: Windows 전용이다. 다른 OS를 쓰게 되면 open/xdg-open을 더한다
-    const openSession = (unit: Decision) => () =>
-      $.process.run(['rundll32', 'url.dll,FileProtocolHandler', unit.link])
 
     const detail = (unit: Decision) => (
       <Box flexDirection="column" gap="md" paddingTop="sm">
@@ -348,27 +392,18 @@ export const register: Register = on => {
       </Box>
     )
 
-    // Button 안의 글자는 색·굵기를 잃는다. 그래서 상태·프로젝트·번호는 Button 밖의 Text로 그린다
-    // plain Button은 글자 왼쪽에 안쪽 여백이 있다. Text 줄을 같은 만큼 들여서 왼쪽 선을 맞춘다
-    // press가 있으면 프로젝트·번호 줄이 버튼이다: 접힌 칸은 펴고, 펴진 칸은 그 세션으로 이동한다
-    const meta = (unit: Decision, press?: () => unknown, suffix = '') => (
-      <Box flexDirection="row" gap="sm" alignItems="center" paddingLeft="xs">
+    const meta = (unit: Decision) => (
+      <Box flexDirection="row" gap="sm" alignItems="center">
         <Text
           color={unit.isBlocking ? 'error' : 'inactive'}
           size="caption"
           weight="semibold"
         >
-          {unit.isBroken ? '오류' : unit.isBlocking ? '멈춤' : '사후 보고'}
+          {kindLabel(unit)}
         </Text>
-        {press ? (
-          <Button key={`${unit.id}:head`} plain onPress={press}>
-            {`${unit.project} ${unit.id}${suffix}`}
-          </Button>
-        ) : (
-          <Text size="caption">
-            {unit.project} {unit.id}
-          </Text>
-        )}
+        <Text size="caption">
+          {unit.project} {unit.id}
+        </Text>
       </Box>
     )
 
@@ -388,7 +423,7 @@ export const register: Register = on => {
     const row = (unit: Decision) => {
       if (unit.isBroken) {
         return slot(
-          <Box flexDirection="column" gap="xs" paddingLeft="xs">
+          <Box flexDirection="column" gap="xs">
             {meta(unit)}
             <Text>{unit.question}</Text>
             <Text dimColor size="caption">
@@ -400,11 +435,9 @@ export const register: Register = on => {
       if (unit.answer !== '') {
         return slot(
           <Box flexDirection="row" justifyContent="space-between" alignItems="center">
-            <Box paddingLeft="xs">
-              <Text dimColor>
-                {statusLabel(unit)} · {unit.answer} · {unit.question}
-              </Text>
-            </Box>
+            <Text dimColor>
+              {statusLabel(unit)} · {unit.answer} · {unit.question}
+            </Text>
             {!unit.isDelivered && (
               <Button key={`${unit.id}:undo`} plain dimColor onPress={cancel(unit)}>
                 취소
@@ -414,11 +447,39 @@ export const register: Register = on => {
         )
       }
       const isOpen = open === unit.id
-      const head = !isOpen
-        ? meta(unit, open1(unit))
-        : unit.link !== ''
-          ? meta(unit, openSession(unit), ' ↗')
-          : meta(unit)
+      const head = Client ? (
+        <Client
+          key={`slot:${unit.id}`}
+          module="./slot.tsx"
+          flexGrow={1}
+          props={{
+            id: unit.id,
+            label: kindLabel(unit),
+            isBlocking: unit.isBlocking,
+            project: unit.project,
+            question: unit.question,
+            isOpen,
+          }}
+        />
+      ) : (
+        <Box flexDirection="column" gap="xs">
+          {meta(unit)}
+          {isOpen ? (
+            <Text weight="semibold" size="heading">
+              {unit.question}
+            </Text>
+          ) : (
+            <Button
+              key={unit.id}
+              plain
+              dimColor={!unit.isBlocking}
+              onPress={() => update($, openId, () => unit.id)}
+            >
+              {unit.question}
+            </Button>
+          )}
+        </Box>
+      )
 
       return slot(
         <Box flexDirection="column" gap="xs">
@@ -434,18 +495,7 @@ export const register: Register = on => {
               </Button>
             )}
           </Box>
-          {isOpen ? (
-            <Box flexDirection="column" paddingLeft="xs" gap="xs">
-              <Text weight="semibold" size="heading">
-                {unit.question}
-              </Text>
-              {detail(unit)}
-            </Box>
-          ) : (
-            <Button key={unit.id} plain dimColor={!unit.isBlocking} onPress={open1(unit)}>
-              {unit.question}
-            </Button>
-          )}
+          {isOpen && detail(unit)}
         </Box>,
       )
     }
@@ -460,7 +510,7 @@ export const register: Register = on => {
       )
     }
 
-    // 묶음 1개: 제목 줄과 칸들. 사후 보고가 2개 이상이면 "모두 확인"을 둔다
+    // 묶음 1개: 제목 줄과 칸들. 확인 요청이 2개 이상이면 "모두 확인"을 둔다
     const section = (title: string, rows: Decision[], hotkey?: string) => {
       const pendingReports = rows.filter(unit => !unit.isBlocking && unit.answer === '')
 
@@ -476,7 +526,7 @@ export const register: Register = on => {
                 hotkey={hotkey}
                 onPress={choose(pendingReports, '확인')}
               >
-                {`사후 보고 ${pendingReports.length}개 모두 확인`}
+                {`확인 요청 ${pendingReports.length}개 모두 확인`}
               </Button>
             )}
           </Box>

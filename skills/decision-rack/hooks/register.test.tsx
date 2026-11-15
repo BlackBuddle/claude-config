@@ -28,6 +28,8 @@ function fakeQueue(on: On, files: Record<string, string>) {
   )
   const submitted: string[] = []
   const contexts: string[] = []
+  const time = { now: 0 }
+  on('clock.now', () => ({ value: time.now }))
   on('command.register', () => ({ value: { command: 'decisions' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
@@ -61,7 +63,7 @@ function fakeQueue(on: On, files: Record<string, string>) {
     return { text: e.text }
   })
 
-  return { files, submitted, contexts }
+  return { files, submitted, contexts, time }
 }
 
 const stop = (extra: object = {}) =>
@@ -84,8 +86,7 @@ test('선택지를 누르면 답이 파일에 쓰인다. 취소하면 지워진�
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
 
-  // 첫 번째 멈춤 줄은 처음부터 열려 있다. 깨진 파일은 오류 칸으로 보인다
-  expect(await ui.find({ type: 'Text', text: /DB를 바꾸는가/ })).toBeTruthy()
+  // 첫 번째 결정 요청 줄은 처음부터 열려 있다 (질문은 slot.tsx가 그린다). 깨진 파일은 오류 칸으로 보인다
   expect(await ui.find({ type: 'Text', text: /멈춘 작업: DB 이전/ })).toBeTruthy()
   expect(await ui.find({ type: 'Text', text: /읽지 못했다/ })).toBeTruthy()
 
@@ -109,7 +110,7 @@ test('선택지를 누르면 답이 파일에 쓰인다. 취소하면 지워진�
 })
 
 test('이 세션이 올린 결정의 답은 이 세션에 1번만 전달된다', async ($, on) => {
-  const { files, submitted } = fakeQueue(on, {
+  const { files, submitted, time } = fakeQueue(on, {
     'Beot-1.json': stop({ session: SESSION, answer: '2번 (바꾼다)' }),
     'JetDeck-1.json': stop({
       session: 'other-session',
@@ -139,12 +140,21 @@ test('이 세션이 올린 결정의 답은 이 세션에 1번만 전달된다',
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect(await ui.find({ type: 'Text', text: /전달함 · 2번/ })).toBeTruthy()
 
-  // 주소의 형식이 다른 칸은 펴져 있어도 이동 버튼이 없다 (처음에 Evil-1이 펴져 있다)
-  expect(await ui.find({ type: 'Button', key: 'Evil-1:head' })).toBeFalsy()
+  const click = async (slot: string) => {
+    await ui.pointer({ type: 'down', x: 1, y: 0, button: 'left', in: slot })
+    await ui.pointer({ type: 'up', x: 1, y: 0, button: 'left', in: slot })
+  }
+  // 주소의 형식이 다른 칸은 펴져 있어도 이동하지 않는다 (처음에 Evil-1이 펴져 있다)
+  await click('slot:Evil-1')
   // 첫 클릭은 펴기다. 펴진 칸을 다시 누르면 그 세션으로 이동한다
-  await ui.press({ key: 'JetDeck-1:head' })
+  await click('slot:JetDeck-1')
   expect(ran).toEqual([])
-  await ui.press({ key: 'JetDeck-1:head' })
+  // 더블 클릭의 두 번째 클릭은 이동이 아니다
+  time.now = 100
+  await click('slot:JetDeck-1')
+  expect(ran).toEqual([])
+  time.now = 2000
+  await click('slot:JetDeck-1')
   expect(ran).toEqual([
     ['rundll32', 'url.dll,FileProtocolHandler', 'claude://claude.ai/epitaxy/local_ab-12'],
   ])
