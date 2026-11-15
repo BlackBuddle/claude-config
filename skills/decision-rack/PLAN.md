@@ -212,7 +212,7 @@
 | 고친다 | `parseDecision`(새 필드), `visibleOf`, `countOf`(`busy` 제외), `waitingLine` → 신호 해석기, `announce`(키 `id + raisedAt`), `raiseMissed` → `sync()`, `prompt.submit`(`busy`), `turn.complete`, `session.start`, `acknowledge`(`state: closed`), `refresh`(이름 모양 거르기, `v2/`), `units` shape `units-3` → `units-4` |
 | 그대로 | `slashed`, `optionLabel`, `optionsLine`, `brokenUnit`, `patchFile`, `byUrgency`, `statusText`, `openUnitId`, `projectKey`, `openSessionLink`, `ownerStamp`, `showStatus`, `ui.close`, `ui.message`, `ui.fault`, `USER_ORIGINS` |
 | 더한다 | `session.end` 훅, `tool.call` `AskUserQuestion` 훅, `slot.tsx`의 흐림 prop |
-| 기타 | `plugin.json` 버전 0.2.0, 설명 수정. `register.tsx`는 나누지 않는다. 줄인 뒤에도 크면 그때 정한다 |
+| 기타 | `plugin.json` 버전 0.2.0, 설명 수정. `register.tsx`는 나누지 않는다. 줄인 뒤에도 크면 그때 정한다 → 검토 뒤 4개로 나눴다 (2026-11-15): `signals.ts` 신호 해석, `units.ts` 칸 계산, `queue.ts` 파일 입출력·판정, `register.tsx` 훅·화면 |
 
 ### 12.3 시험 (`claude plugin test <mod 폴더>`)
 1. `결재:` 줄 → `waiting`, `request`

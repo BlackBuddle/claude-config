@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { ageText, signalsOf, statusText } from './register'
+import { ageText, lastTurn, rackFirst, signalsOf, statusText } from './register'
 
 const PANE = {
   plugin: 'decision-rack',
@@ -39,7 +39,13 @@ function fakeQueue(on: On, files: Record<string, string>) {
   // 도구가 실행되는 동안의 기다림 칸 상태 (선택 카드가 떠 있는 동안)
   const during: unknown[] = []
   on('clock.now', () => ({ value: time.now }))
-  on('clock.every', () => ({ value: {} as never }))
+  // 주기 타이머를 만든 횟수와 파일별 읽기 횟수 (검토 7번, 10번)
+  const counts = { timers: 0, reads: {} as Record<string, number> }
+  on('clock.every', () => {
+    counts.timers += 1
+
+    return { value: {} as never }
+  })
   on('command.register', () => ({ value: { command: 'decisions' } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('session.end', (_, e) => ({ sessionId: e.sessionId }))
@@ -73,7 +79,11 @@ function fakeQueue(on: On, files: Record<string, string>) {
       })),
     }
   })
-  on('fs.read', (_, e) => ({ value: files[name(e.path)] as never }))
+  on('fs.read', (_, e) => {
+    counts.reads[name(e.path)] = (counts.reads[name(e.path)] ?? 0) + 1
+
+    return { value: files[name(e.path)] as never }
+  })
   on('fs.write', (_, e) => {
     files[name(e.path)] = e.text
     mtimes[name(e.path)] = ++clock
@@ -98,7 +108,7 @@ function fakeQueue(on: On, files: Record<string, string>) {
     mtimes[file] = ++clock
   }
 
-  return { files, opened, ran, listed, time, transcript, during, touch }
+  return { files, opened, ran, listed, time, transcript, during, touch, counts }
 }
 
 const unitText = (extra: object = {}) =>
@@ -489,5 +499,82 @@ test('띠의 글은 0이 아닌 종류만 쓴다. 상태 줄은 지운다. 패�
   expect(await band.find({ type: 'Button', key: 'open-rack' })).toBeFalsy()
   await band.unmount()
   // 시험이 끝나기 전에 패널을 붙였다 뗀다. 그래야 남은 주기 작업이 거절을 남기지 않는다
+  await (await $.ui.mount({ ...PANE, surface: 'desktop' })).unmount()
+})
+
+test('검토 고침: 인라인 코드 속 표시는 신호가 아니다. 턴 중간 알림이 턴을 자르지 않는다. 띠 순서', async () => {
+  // 2번: 표시 줄을 설명하는 글은 신호가 아니다. 진짜 신호의 백틱은 칸에서 뗀다
+  expect(signalsOf('규칙:\n- `결재:` 줄을 쓴다\n- `확인:` 줄을 쓴다')).toMatchObject({
+    kind: undefined,
+    reports: [],
+  })
+  expect(signalsOf('결재: `a.py`를 지운다').lines).toEqual(['a.py를 지운다'])
+  // 5번: turn.start의 메시지 수가 있으면 턴 안에 끼어든 알림 앞의 글도 본다
+  const messages = [
+    { role: 'user', text: '해 줘', toolUses: [] },
+    { role: 'assistant', text: '확인: 이름을 정했다', toolUses: [] },
+    { role: 'user', text: '<task-notification>', toolUses: [] },
+    { role: 'assistant', text: '끝냈다.', toolUses: [] },
+  ] as never
+  expect(lastTurn(messages, 1).allText).toContain('확인: 이름을 정했다')
+  expect(lastTurn(messages).allText).not.toContain('확인: 이름을 정했다')
+  // 8번: 결재함 줄만 맨 위로. 나머지 순서는 그대로
+  const rows = [{ plugin: 'ponytail' }, { plugin: 'other' }, { plugin: 'decision-rack' }]
+  expect(rackFirst(rows).map(row => row.plugin)).toEqual(['decision-rack', 'ponytail', 'other'])
+})
+
+test('검토 고침: 사용자 턴 안의 작업 알림, 알림 턴의 선택 카드 답 뒤에도 신호 없는 턴은 칸을 닫는다', async ($, on) => {
+  const { files } = fakeQueue(on, {})
+  await $.session.start(START)
+  const turn = turnOf($)
+
+  // 1번: 사용자 입력 뒤에 작업 알림이 끼어들어도 사용자 턴이다
+  await turn('결재: DB를 바꾼다')
+  await $.prompt.submit({ text: '바꿔', ...userSays } as never)
+  await $.prompt.submit({ text: '<task>', ...taskSays } as never)
+  await turn('바꿨다.')
+  expect(parsed(files, WAIT).state).toBe('closed')
+
+  // 3번: 작업 알림으로 시작한 턴에서 선택 카드에 답했다
+  await $.prompt.submit({ text: '<task>', ...taskSays } as never)
+  await $.tool.call({
+    tool: 'AskUserQuestion',
+    questions: [
+      {
+        question: '어느 쪽인가?',
+        header: 'x',
+        multiSelect: false,
+        options: [
+          { label: 'A', description: '' },
+          { label: 'B', description: '' },
+        ],
+      },
+    ],
+  } as never)
+  expect(parsed(files, WAIT).state).toBe('busy')
+  await turn('A로 했다.')
+  expect(parsed(files, WAIT).state).toBe('closed')
+  await (await $.ui.mount({ ...PANE, surface: 'desktop' })).unmount()
+})
+
+test('검토 고침: 세션 시작은 진행 중 칸을 다시 판정하지 않는다. 타이머는 1개. 바뀌지 않은 파일은 다시 읽지 않는다', async ($, on) => {
+  const { files, transcript, counts } = fakeQueue(on, {
+    [WAIT]: unitText({ state: 'busy', session: SESSION, root: '/proj', raisedAt: 5 }),
+    '12345678-wait.json': unitText(),
+  })
+  transcript.push(
+    { role: 'user', text: '해 줘', toolUses: [] },
+    { role: 'assistant', text: '하는 중이다. 결재: 중간 글', toolUses: [] },
+  )
+  // 6번: 진행 중인 턴의 중간 글로 칸을 바꾸지 않는다
+  await $.session.start(START)
+  expect(parsed(files, WAIT)).toMatchObject({ state: 'busy', raisedAt: 5 })
+  // 7번: session.start가 다시 와도 타이머는 1개다
+  await $.session.start(START)
+  expect(counts.timers).toBe(1)
+  // 10번: 강제로 다시 읽어도 바뀌지 않은 파일은 읽지 않는다
+  const before = counts.reads['12345678-wait.json']
+  await $.command.run({ command: 'decisions' } as never)
+  expect(counts.reads['12345678-wait.json']).toBe(before)
   await (await $.ui.mount({ ...PANE, surface: 'desktop' })).unmount()
 })
