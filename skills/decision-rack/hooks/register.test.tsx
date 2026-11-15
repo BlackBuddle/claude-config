@@ -652,3 +652,37 @@ test('닫힌 지 7일이 안 된 칸은 지우지 않는다', async ($, on) => {
   await (await $.ui.mount({ ...PANE, surface: 'desktop' })).unmount()
 })
 
+
+test('보관·앱 종료(other)로 끝나면 칸에 세션 끝남 표시를 하고, 다시 시작하면 지운다', async ($, on) => {
+  const { files } = fakeQueue(on, {})
+  await $.session.start(START)
+  await turnOf($)('결재: DB를 바꾼다')
+  const resume = { sessionId: SESSION, resume: {} } as never
+
+  await $.session.end({ reason: 'other', ...(resume as object) } as never)
+  expect(parsed(files, WAIT)).toMatchObject({ state: 'waiting', ended: true })
+  // 세션이 다시 살아나면 표시를 지운다
+  await $.session.start(START)
+  expect('ended' in parsed(files, WAIT)).toBe(false)
+  expect(parsed(files, WAIT).state).toBe('waiting')
+  await (await $.ui.mount({ ...PANE, surface: 'desktop' })).unmount()
+})
+
+test('세션 끝남 칸은 결재라도 닫기가 있고, 띠의 개수에서 빠진다', async ($, on) => {
+  const { files } = fakeQueue(on, {
+    'abab0000-wait.json': unitText({ kind: 'request', ended: true }),
+    'cdcd0000-wait.json': unitText({ kind: 'request' }),
+  })
+  expect(
+    statusText([
+      { kind: 'request', state: 'waiting', isBroken: false, isEnded: true },
+      { kind: 'request', state: 'waiting', isBroken: false, isEnded: false },
+    ] as never),
+  ).toBe('결재 1')
+  await $.session.start(START)
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Button', key: 'cdcd0000-wait:close' })).toBeFalsy()
+  await ui.press({ key: 'abab0000-wait:close' })
+  expect(parsed(files, 'abab0000-wait.json').state).toBe('closed')
+  await ui.unmount()
+})

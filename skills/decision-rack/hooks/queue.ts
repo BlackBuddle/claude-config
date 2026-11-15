@@ -256,3 +256,16 @@ export async function cleanClosed($: EngineInterface): Promise<void> {
   for (const name of names) parsedFiles.delete(name)
 }
 
+// 이 세션의 기다림 칸에 "세션 끝남" 표시를 쓰거나 지운다. 닫힌 칸은 건드리지 않는다
+// 보관과 앱 종료는 같은 이유(other)로 와서 구별하지 못한다. 그래서 칸을 닫지 않고 표시만 한다 (2026-11-16 사용자 결정)
+export async function markEnded(
+  $: EngineInterface,
+  sessionId: string,
+  isEnded: boolean,
+): Promise<void> {
+  const path = await unitPath($, sessionId, 'wait')
+  const prev = await readUnit($, path)
+  if (prev === undefined || prev.state === 'closed' || (prev.ended === true) === isEnded) return
+  await writeUnit($, path, { ...prev, ended: isEnded ? true : undefined }, prev)
+}
+

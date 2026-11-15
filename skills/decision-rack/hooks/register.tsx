@@ -14,6 +14,7 @@ import {
   projectKey,
   readUnit,
   cleanClosed,
+  markEnded,
   refresh,
   setState,
   sync,
@@ -93,6 +94,8 @@ export const register: Register = on => {
     await refresh($)
     // 다시 연 세션과 다시 읽은 mod는 마지막 답으로 다시 판정한다. 신호가 없어도 닫지 않는다
     // 진행 중(busy)이면 턴이 아직 돌고 있을 수 있다. 그 턴의 끝이 판정한다
+    // 이 세션이 다시 살아났다. 지난번에 끝날 때 쓴 "세션 끝남" 표시를 지운다
+    await markEnded($, await $.session.id(), false).catch(() => undefined)
     const ownWait = await readUnit($, await unitPath($, await $.session.id(), 'wait'))
     if (ownWait?.state !== 'busy') {
       const turn = lastTurn(await $.session.messages().catch(() => []))
@@ -114,9 +117,12 @@ export const register: Register = on => {
   })
 
   // 사용자가 세션을 끝냈다. 기다림 칸만 닫는다. 확인 칸은 사용자가 확인을 눌러야 닫힌다 (D2)
+  // 그 밖의 끝(보관, 앱 종료, 이어받기)은 칸을 남기고 "세션 끝남" 표시만 한다
   on('session.end', async ($, e, next) => {
     if (CLOSING_ENDS.has(e.reason)) {
       await setState($, e.sessionId, 'wait', ['waiting', 'busy'], 'closed').catch(() => undefined)
+    } else {
+      await markEnded($, e.sessionId, true).catch(() => undefined)
     }
 
     return next(e)
@@ -328,6 +334,7 @@ export const register: Register = on => {
     const row = (unit: Decision) => {
       const isOpen = open === unit.id
       const isBusy = unit.state === 'busy'
+      const isEnded = unit.isEnded
       const look = KIND_LOOK[unit.kind]
       const age = ageText(now, unit.raisedAt)
       const head = Client ? (
@@ -340,6 +347,7 @@ export const register: Register = on => {
             kind: unit.kind,
             isBroken: unit.isBroken,
             isBusy,
+            isEnded,
             project: unit.project,
             age,
             question: unit.question,
@@ -349,15 +357,15 @@ export const register: Register = on => {
       ) : (
         <Box flexDirection="column" gap="xs">
           <Box flexDirection="row" gap="sm" alignItems="center">
-            <Text color={look.color} size="caption" weight="semibold" dimColor={isBusy}>
-              ● {unit.isBroken ? '오류' : isBusy ? '진행 중' : look.label}
+            <Text color={look.color} size="caption" weight="semibold" dimColor={isBusy || isEnded}>
+              ● {unit.isBroken ? '오류' : isEnded ? '세션 끝남' : isBusy ? '진행 중' : look.label}
             </Text>
             <Text size="caption">
               {unit.project} {age}
             </Text>
           </Box>
           {isOpen ? (
-            <Text weight="semibold" size="heading" dimColor={isBusy}>
+            <Text weight="semibold" size="heading" dimColor={isBusy || isEnded}>
               {unit.question}
             </Text>
           ) : (
@@ -385,7 +393,8 @@ export const register: Register = on => {
             {/* 보관·강제 종료한 세션은 mod가 앱 종료와 구별하지 못해 칸이 남는다. 사용자가 직접 닫는다 (2026-11-16 사용자 결정) */}
             {/* 세션이 아직 기다리면 그 세션의 다음 판정에서 칸이 다시 생긴다 */}
             {/* 결재(빨강)는 중요해서 닫기를 두지 않는다. 그 세션에서 답해야 사라진다 (2026-11-16 사용자 결정) */}
-            {unit.kind === 'notice' && !unit.isBroken && (
+            {/* 끝난 세션의 칸은 결재라도 닫는다. 그 세션은 다시 답하지 못할 수 있다 (2026-11-16 사용자 결정) */}
+            {(unit.kind === 'notice' || (unit.isEnded && unit.kind === 'request')) && !unit.isBroken && (
               <Box flexShrink={0}>
                 <Button key={`${unit.id}:close`} plain label="닫기" onPress={acknowledge([unit])} />
               </Box>

@@ -56,6 +56,7 @@ export function brokenUnit(path: string, why: string): Decision {
     link: '',
     root: '',
     isBroken: true,
+    isEnded: false,
     question: '읽지 못했다',
     options: [],
     background: [],
@@ -81,6 +82,7 @@ export function parseDecision(path: string, text: string): Decision {
       link: SESSION_LINK_FORMAT.test(String(raw.link)) ? String(raw.link) : '',
       root: String(raw.root ?? ''),
       isBroken: false,
+      isEnded: raw.ended === true,
       question: lines[0],
       options: strings(raw.options),
       background: kind === 'report' ? lines.slice(1) : backgroundLines(raw.background),
@@ -106,7 +108,9 @@ export function visibleOf(list: Decision[]): Decision[] {
 
 // 상태 줄은 사용자를 기다리는 칸만 센다. 진행 중인 칸은 세지 않는다 (Q3)
 export function countOf(list: Decision[], kind: Kind): number {
-  return list.filter(unit => unit.kind === kind && !unit.isBroken && unit.state !== 'busy').length
+  return list.filter(
+    unit => unit.kind === kind && !unit.isBroken && !unit.isEnded && unit.state !== 'busy',
+  ).length
 }
 
 // 상태 줄의 글이다. 0인 종류는 쓰지 않는다. 칸이 없으면 undefined이다 (상태 줄을 지운다)
@@ -144,6 +148,7 @@ export function needsAttention(unit: Decision, project: string, sessionId: strin
     unit.kind !== 'report' &&
     !unit.isBroken &&
     unit.state === 'waiting' &&
+    !unit.isEnded &&
     unit.root !== '' &&
     unit.root === project &&
     unit.session !== sessionId

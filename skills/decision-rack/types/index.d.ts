@@ -21,6 +21,8 @@ export type Decision = {
   // 주인 세션의 프로젝트 키. 패널이 "이 프로젝트"를 가리는 데 쓴다
   root: string
   isBroken: boolean
+  // 칸의 세션이 끝났다 (보관, 앱 종료, 강제 종료). 그 세션이 다시 시작하면 지운다
+  isEnded: boolean
   question: string
   options: string[]
   // 질문 아래의 줄. 확인 칸은 첫 줄 다음의 줄들
