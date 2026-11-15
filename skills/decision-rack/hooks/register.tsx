@@ -323,6 +323,8 @@ export const register: Register = on => {
     if (!(await read($, isDismissed))) {
       void $.ui.open({ id: PANE, title: TITLE, columns: PANE_COLUMNS })
     }
+    // 이전 판이 앱의 상태 줄에 쓴 글("결재 1 · 확인 0")을 지운다. 이 판은 상태 줄을 쓰지 않는다
+    $.ui.status(undefined)
     await projectKey($)
     await refresh($)
     $.clock.every(POLL_MS, () => {
