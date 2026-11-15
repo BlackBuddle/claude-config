@@ -380,6 +380,13 @@ export const register: Register = on => {
                 </Button>
               </Box>
             )}
+            {/* 보관·강제 종료한 세션은 mod가 앱 종료와 구별하지 못해 칸이 남는다. 사용자가 직접 닫는다 (2026-11-16 사용자 결정) */}
+            {/* 세션이 아직 기다리면 그 세션의 다음 판정에서 칸이 다시 생긴다 */}
+            {unit.kind !== 'report' && !unit.isBroken && (
+              <Box flexShrink={0}>
+                <Button key={`${unit.id}:close`} plain label="닫기" onPress={acknowledge([unit])} />
+              </Box>
+            )}
           </Box>
           {isOpen && detail(unit)}
         </Box>,

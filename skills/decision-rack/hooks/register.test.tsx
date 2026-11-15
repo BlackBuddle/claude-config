@@ -599,3 +599,17 @@ test('다른 세션 안에서 띄운 세션은 부모의 앱 주소를 쓰지 �
   expect(parsed(files, 'cccc0000-wait.json').state).toBe('waiting')
   await (await $.ui.mount({ ...PANE, surface: 'desktop' })).unmount()
 })
+
+test('기다림 칸의 닫기를 누르면 그 칸을 닫는다. 확인 칸에는 닫기가 없다', async ($, on) => {
+  const { files } = fakeQueue(on, {
+    'dddd0000-wait.json': unitText({ question: '이 세션을 보관할까요?' }),
+    'eeee0000-report.json': unitText({ kind: 'report', question: undefined, lines: ['a'] }),
+  })
+  await $.session.start(START)
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Button', key: 'eeee0000-report:close' })).toBeFalsy()
+  await ui.press({ key: 'dddd0000-wait:close' })
+  expect(parsed(files, 'dddd0000-wait.json')).toMatchObject({ state: 'closed', question: '이 세션을 보관할까요?' })
+  expect(await ui.find({ type: 'Button', key: 'dddd0000-wait:close' })).toBeFalsy()
+  await ui.unmount()
+})
