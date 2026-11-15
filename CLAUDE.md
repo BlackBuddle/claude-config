@@ -65,6 +65,13 @@
 - Same problem fails 3 times → stop and present options. New ideas go to ROADMAP's parking lot, not straight into scope
 - Before working in a folder another session may be editing, check for it and coordinate via HANDOFF/ROADMAP instead of editing the same files at once
 
+## 결정 대기열 (global, 2026-11-15 user instruction; full text: `~/.claude/docs/통합_작업방식.md` 11절)
+- 총괄 세션이 연 하위 세션은 사용자에게 결정을 직접 묻지 않는다. 결정 1개를 `~/.claude/decisions/<프로젝트>-<MMDD>-<HHMM>.json` 파일 1개로 쓴다. 쓰기 전에 11절의 양식을 읽는다
+- 가 등급 (되돌리기 쉽다): 추천안으로 진행한다. 파일은 사후 보고다. 나 등급 (범위·설계·의존성·되돌릴 수 없는 일): 그 작업을 멈춘다. 막히지 않은 다른 작업을 계속한다
+- 총괄 세션은 `결정 <번호>: <답>` 입력을 받으면 번호마다 한다: `docs/결정_기록.md`에 원문을 쓴다 → 하위 세션에 답 원문을 보낸다 → 대기열 파일을 지운다
+- 사용자가 하위 세션에 직접 지시하면 그 지시가 이 규칙보다 앞선다
+- 대기열은 우측 "결정 랙" 패널이 보여준다 (mod `decision-rack`, 명령 `/decisions`)
+
 ## 답변 문체 · 출력 형식 (global, 2026-10-26 user instruction)
 - 모든 답변은 ASD-STE100 규칙을 한국어에 적용해 쓴다. 필수 규칙:
   - 한 문장에 지시 1개. 문장은 짧게 (절차문 20단어 이하, 설명문 25단어 이하)
