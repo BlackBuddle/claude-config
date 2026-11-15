@@ -40,8 +40,7 @@ const isDismissed = atom({ plugin: 'decision-rack', key: 'isDismissed' } as cons
 let lastSignature = '\0'
 let cachedQueueDir: string | undefined
 let cachedProject: string | undefined
-// 터미널의 REPL인가. 앱 세션 안에서 띄운 claude는 앱의 세션 주소(환경 변수)를 물려받는다. 그 주소를 쓰면 엉뚱한 세션으로 간다
-// shortcut: -p 실행(surface null)은 가리지 못한다. 앱 세션의 surface 값을 확인하면 그때 조건을 좁힌다
+// 터미널의 REPL인가. 앱의 세션 주소(환경 변수)는 앱이 연 세션의 것이다. 터미널에서 그 주소를 쓰면 엉뚱한 세션으로 간다
 let isTerminal = false
 
 export function markTerminal(value: boolean): void {
@@ -131,21 +130,30 @@ export async function setState(
   await writeUnit($, path, { ...prev, state: to }, prev)
 }
 
+// 다른 세션 안에서 띄운 세션인가 (예: 앱 세션의 Bash가 실행한 claude -p)
+// 부모는 자기 세션 번호를 CLAUDE_CODE_SESSION_ID로 물려준다. 앱이 연 세션에는 이 값이 없다 (2026-11-15 실제 확인)
+export function isNestedSession(parentId: string | undefined, sessionId: string): boolean {
+  return parentId !== undefined && parentId !== '' && parentId !== sessionId
+}
+
 // 칸에 쓰는 주인 세션의 표시: 프로젝트, 세션 번호, 앱에서 여는 주소
+// 다른 세션 안에서 띄운 세션은 부모의 앱 주소를 물려받는다. 그 주소를 쓰지 않는다 (링크가 없으면 옛 칸 닫기도 하지 않는다)
 async function ownerStamp($: EngineInterface): Promise<UnitFile> {
-  const hostId = isTerminal ? undefined : await $.env.get('CLAUDE_CODE_HOST_SESSION_ID')
+  const sessionId = await $.session.id()
+  const isNested = isNestedSession(await $.env.get('CLAUDE_CODE_SESSION_ID'), sessionId)
+  const hostId =
+    isTerminal || isNested ? undefined : await $.env.get('CLAUDE_CODE_HOST_SESSION_ID')
   const root = slashed(await $.session.root().catch(() => ''))
 
   return {
     project: root.split('/').filter(Boolean).pop() ?? '?',
     root: await projectKey($),
-    session: await $.session.id(),
+    session: sessionId,
     link: hostId ? `${SESSION_LINK}${hostId}` : undefined,
   }
 }
 
 // 같은 앱 세션이 이어받기 등으로 새 세션 번호를 받으면 옛 번호의 기다림 칸은 주인이 없다. 그 칸을 닫는다
-// shortcut: 앱 세션 안에서 띄운 claude -p도 같은 주소를 물려받아 부모의 칸을 닫을 수 있다. 부모는 턴 끝에 다시 판정한다
 async function closeOrphans($: EngineInterface, link: unknown, sessionId: string): Promise<void> {
   if (typeof link !== 'string') return
   const orphans = (await read($, units)).filter(

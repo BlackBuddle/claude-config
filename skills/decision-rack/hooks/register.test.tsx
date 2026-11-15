@@ -52,8 +52,15 @@ function fakeQueue(on: On, files: Record<string, string>) {
   on('session.id', () => ({ value: SESSION }))
   on('session.root', () => ({ value: '/Proj' }))
   on('session.messages', () => ({ value: transcript as never }))
+  // 앱 세션의 환경 변수. parent는 이 세션을 띄운 부모 세션의 번호다 (앱이 연 세션에는 없다)
+  const env: { parent?: string } = {}
   on('env.get', (_, e) => ({
-    value: e.name === 'CLAUDE_CODE_HOST_SESSION_ID' ? 'local_abc' : 'C:/Users/x',
+    value:
+      e.name === 'CLAUDE_CODE_HOST_SESSION_ID'
+        ? 'local_abc'
+        : e.name === 'CLAUDE_CODE_SESSION_ID'
+          ? env.parent
+          : 'C:/Users/x',
   }))
   on('ui.open', (_, e) => {
     opened.push(`open:${e.columns}`)
@@ -108,7 +115,7 @@ function fakeQueue(on: On, files: Record<string, string>) {
     mtimes[file] = ++clock
   }
 
-  return { files, opened, ran, listed, time, transcript, during, touch, counts }
+  return { files, opened, ran, listed, time, transcript, during, touch, counts, env }
 }
 
 const unitText = (extra: object = {}) =>
@@ -576,5 +583,19 @@ test('검토 고침: 세션 시작은 진행 중 칸을 다시 판정하지 않�
   const before = counts.reads['12345678-wait.json']
   await $.command.run({ command: 'decisions' } as never)
   expect(counts.reads['12345678-wait.json']).toBe(before)
+  await (await $.ui.mount({ ...PANE, surface: 'desktop' })).unmount()
+})
+
+test('다른 세션 안에서 띄운 세션은 부모의 앱 주소를 쓰지 않고 부모의 칸을 닫지 않는다', async ($, on) => {
+  const app = 'claude://claude.ai/epitaxy/local_abc'
+  const { files, env } = fakeQueue(on, {
+    'cccc0000-wait.json': unitText({ session: 'cccc0000-parent', link: app, root: '/proj' }),
+  })
+  env.parent = 'cccc0000-parent'
+  await $.session.start(START)
+  await turnOf($)('끝냈다.\n시험인가?')
+  expect(parsed(files, WAIT).state).toBe('waiting')
+  expect('link' in parsed(files, WAIT)).toBe(false)
+  expect(parsed(files, 'cccc0000-wait.json').state).toBe('waiting')
   await (await $.ui.mount({ ...PANE, surface: 'desktop' })).unmount()
 })
