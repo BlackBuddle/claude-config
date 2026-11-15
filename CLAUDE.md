@@ -52,7 +52,7 @@
 - Every session (incl. sub-sessions) states the needed effort level + one-line reason BEFORE starting work
 - Do not start work until the user changes the effort level and confirms (e.g. "변경함"). Until then, reading only. After "변경함", check the real model and effort level with `get_session` (target `self`). If they differ from what you proposed, do not start; say so. Where that tool does not exist (terminal `claude`), write "확인하지 못했다" and proceed
 - 예외 (2026-11-15 사용자 지시): 실제 수준이 필요한 수준과 이미 같으면 확인을 기다리지 않는다. `get_session`으로 확인하고 "노력 수준은 <수준>이다. 필요한 수준과 같다."를 1줄로 쓴 뒤 시작한다. `get_session`이 없으면 이 예외를 쓰지 않는다
-- 수준이 다르면 요청을 결재함에도 올린다 (11절 "노력 수준 변경 요청". 나 등급, 선택지 없음). 결재함의 칸은 알림이다: 사용자는 칸을 눌러 그 세션으로 가서 수준을 직접 바꾸고 그 세션에 "변경함"이라고 쓴다
+- 수준이 다르면 요청을 결재함에도 올린다 (11절 "노력 수준 변경 요청". 알림 칸). 사용자는 칸을 눌러 그 세션으로 가서 수준을 직접 바꾸고 그 세션에 "변경함"이라고 쓴다
 - If the level stops fitting mid-task, stop and propose again. Also propose anew whenever the kind of work changes (e.g. implement → review)
 - Levels: low = docs·progress tables·commits / medium = normal implementation·tests / high = design judgment·evaluation·review·debugging after repeated failure / xhigh+ = separate session on a higher model
 - Before recommending a level, check the current session's model (2026-11-14 user instruction, all projects). Write the model with the level ("Sonnet 5.5 기준 medium"). The table above fits the project's base model. On a higher model, recommend one level lower; raise it again if the same problem fails repeatedly. If the session model differs from the project's base model, say so first
@@ -67,16 +67,14 @@
 - Same problem fails 3 times → stop and present options. New ideas go to ROADMAP's parking lot, not straight into scope
 - Before working in a folder another session may be editing, check for it and coordinate via HANDOFF/ROADMAP instead of editing the same files at once
 
-## 결정 대기열 (global, 2026-11-15 user instruction; full text: `~/.claude/docs/통합_작업방식.md` 11절)
-- 모든 세션은 사용자에게 결정을 직접 묻지 않는다 (직접 연 세션, 하위 세션, 총괄 세션. 2026-11-15 범위 확대). 결정 1개를 `~/.claude/decisions/<프로젝트>-<MMDD>-<HHMM>.json` 파일 1개로 쓴다 (Write 도구). 쓰기 전에 11절의 양식을 읽는다
-- 결정에는 자료를 붙인다: 전체 자료를 자기 대화에 먼저 쓴다 → 결정 파일의 `background`에 요약 3~6줄을 쓴다 → 선택지마다 `effect` 1줄을 쓴다. 사용자는 결재함의 칸만 보고 결정한다
-- 예외: push·삭제·릴리스·범위 변경 등 "늘 그 자리에서 확인받는 일"은 대기열로 보내지 않는다. 그 자리에서 확인받는다
-- 예외: 요청의 뜻을 되묻는 질문 (예: "어느 파일인가?")은 채팅에서 묻는다. 대기열은 가 등급·나 등급의 결정만 받는다
-- 가 등급 (되돌리기 쉽다): 추천안으로 진행한다. 파일은 확인 요청이다 (패널 표시: "확인 요청"). 나 등급 (설계·의존성·구현 방향, 패널 표시: "결재 요청"): 그 작업을 멈춘다. 막히지 않은 다른 작업을 계속한다
-- 답은 `[결재함] 사용자가 패널에서 결정에 답했다.`로 시작하는 입력으로 온다 (mod `decision-rack`이 넣는다). 받으면: 결정 파일의 `answer` 값과 같은지 확인한다 → 자기 프로젝트의 `docs/결정_기록.md`에 쓴다 → 파일을 지운다 → 작업을 계속한다. 값이 다르면 멈추고 사용자에게 알린다
-- 사용자가 세션에 직접 지시하면 그 지시가 이 규칙보다 앞선다
-- 패널: 명령 `/decisions`. 어느 세션의 패널에서 답해도 결정을 올린 세션이 답을 받는다
-- 총괄 세션: 사용자는 총괄 세션의 패널에서 결정한다. 답한 결정은 총괄 세션의 다음 입력에 `[결재함] … 참고용이다`로 붙는다. 읽고 전체 진행에 반영한다. 다시 전달하지 않는다. 기록하지 않는다 (결정을 올린 세션이 한다)
+## 결재함 (global, 2026-11-15 user instruction; full text: `~/.claude/docs/통합_작업방식.md` 11절)
+- 결정은 세션의 대화에서 한다. 결재함은 내용을 보여주고 그 세션으로 보낸다 (2026-11-15 방향 변경. 결재함에 답하는 버튼이 없다)
+- 모든 세션 (직접 연 세션, 하위 세션, 총괄 세션): 사용자의 답이 필요하면 평소처럼 자기 대화에 묻는다 (자료와 질문). 동시에 결재함에 칸 1개를 올린다: `~/.claude/decisions/<프로젝트>-<MMDD>-<HHMM>.json`을 Write 도구로 쓴다. 쓰기 전에 11절의 양식을 읽는다. 사용자를 기다리며 턴을 끝낼 때는 항상 올린다
+- 칸의 종류 (`grade`): `"나"` = 결재 (빨강. 되돌리기 어려운 결정. 그 작업을 멈춘다). `"알림"` = 알림 (노랑. 그 밖에 사용자가 이 세션에서 해야 하는 일: 노력 수준, push·삭제 등의 확인, 계획 승인, 화면 확인, 선택 카드, 되묻는 질문). `"가"` = 확인 (초록. 되돌리기 쉬운 결정을 추천안으로 이미 진행했다)
+- 칸은 짧게 쓴다: `question` 1문장, `background` 1~2줄, `options`는 선택지의 이름만. 전체 자료(근거, 선택지마다의 결과, 추천 이유)는 자기 대화에 쓴다. 사용자는 칸을 눌러 세션으로 와서 읽는다
+- 답은 대화에서 받는다. 사용자가 이 세션에 입력하면 mod가 이 세션의 결재·알림 칸을 내린다. `[결재함] 이 세션이 올린 칸을 결재함에서 내렸다: <번호>` 알림을 받으면: 그 결정 파일을 지운다 → 입력이 답이면 답대로 한다 (결재의 답은 `docs/결정_기록.md`에 쓴다) → 아직 기다리는 것이 있으면 새 번호로 다시 올린다
+- 확인(초록) 칸은 사용자가 결재함에서 "확인"을 눌러 내린다. 그 번호도 같은 알림으로 온다. 그때 파일을 지운다
+- 패널: 명령 `/decisions`. 칸을 누르면 펴진다. 다시 누르면 그 칸을 올린 세션으로 간다
 
 ## 답변 문체 · 출력 형식 (global, 2026-10-26 user instruction)
 - 모든 답변은 ASD-STE100 규칙을 한국어에 적용해 쓴다. 필수 규칙:
