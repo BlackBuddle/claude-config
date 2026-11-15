@@ -686,3 +686,13 @@ test('세션 끝남 칸은 결재라도 닫기가 있고, 띠의 개수에서 �
   expect(parsed(files, 'abab0000-wait.json').state).toBe('closed')
   await ui.unmount()
 })
+
+test('선택지 이름에 번호가 있으면 번호를 또 붙이지 않는다', async ($, on) => {
+  fakeQueue(on, {
+    'abcd0000-wait.json': unitText({ options: ['① Opus 새 세션 (추천)', '② 지금 세션'] }),
+  })
+  await $.session.start(START)
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /Opus/ }))?.text).toBe('① Opus 새 세션 (추천)  ② 지금 세션')
+  await ui.unmount()
+})

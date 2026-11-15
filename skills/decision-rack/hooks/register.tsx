@@ -342,6 +342,8 @@ export const register: Register = on => {
           key={`slot:${unit.id}`}
           module="./slot.tsx"
           flexGrow={1}
+          // 폭이 없으면 그린 글만큼 넓어져 긴 질문이 칸 밖으로 나간다. 부모 폭에 맞춰 줄을 바꾸게 한다 (2026-11-16 사용자 보고)
+          width="100%"
           props={{
             id: unit.id,
             kind: unit.kind,

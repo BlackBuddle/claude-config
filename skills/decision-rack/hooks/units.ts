@@ -13,6 +13,7 @@ export const STATES: State[] = ['waiting', 'busy', 'closed']
 
 export const MAX_QUESTION_CHARS = 60
 
+const NUMBERED = /^\s*([①-⑳]|\d+[.)])/
 export const CIRCLED = '①②③④⑤⑥⑦⑧⑨'
 
 // 결재는 빨강, 알림은 노랑, 확인은 초록이다 (2026-11-15 사용자 결정)
@@ -33,8 +34,11 @@ export function clip(text: string): string {
 }
 
 // 선택지를 1줄로 쓴다: '① JSON 파일 (추천)  ② SQLite'
+// 선택지 이름이 이미 번호(①, 1., 1))로 시작하면 번호를 또 붙이지 않는다
 export function optionsLine(unit: Decision): string {
-  return unit.options.map((label, i) => `${CIRCLED[i] ?? `${i + 1}.`} ${label}`).join('  ')
+  return unit.options
+    .map((label, i) => (NUMBERED.test(label) ? label : `${CIRCLED[i] ?? `${i + 1}.`} ${label}`))
+    .join('  ')
 }
 
 // 배경은 글자 1개 또는 줄의 목록이다. 줄 앞의 글머리표는 패널이 그리므로 뗀다
