@@ -48,11 +48,12 @@
 - Reference: `~/.claude/docs/하이쿠_요약_시스템.md`
 
 ## Effort level · model (global, 2026-10-23 user instruction; full text: `~/.claude/docs/노력수준_모델운용.md`)
+- Fable 사용 중지 (2026-11-15 user instruction, 모든 프로젝트): Fable은 배정하지 않는다. 자동 배정은 Opus 5.5 / Sonnet 5.5 위주로 한다 (요약만 Haiku). 프로젝트 문서의 Fable 배정은 Opus 5.5로 읽는다
 - Base model: set once per project by the user and written in the project CLAUDE.md. If none is written, ask at the start (recommend one + why). Recommend by: mostly implementation and docs with many sessions → Sonnet; mostly design judgment and review with few sessions → a higher model; only summarizing long material → Haiku (`summarizer`). Within the base model, change only the effort level
 - Every session (incl. sub-sessions) states the needed effort level + one-line reason BEFORE starting work
 - Do not start work until the user changes the effort level and confirms (e.g. "변경함"). Until then, reading only. After "변경함", check the real model and effort level with `get_session` (target `self`). If they differ from what you proposed, do not start; say so. Where that tool does not exist (terminal `claude`), write "확인하지 못했다" and proceed
 - 예외 (2026-11-15 사용자 지시): 실제 수준이 필요한 수준과 이미 같으면 확인을 기다리지 않는다. `get_session`으로 확인하고 "노력 수준은 <수준>이다. 필요한 수준과 같다."를 1줄로 쓴 뒤 시작한다. `get_session`이 없으면 이 예외를 쓰지 않는다
-- 수준이 다르면 요청을 결재함에도 올린다 (11절 "노력 수준 변경 요청". 알림 칸). 사용자는 칸을 눌러 그 세션으로 가서 수준을 직접 바꾸고 그 세션에 "변경함"이라고 쓴다
+- 수준이 다르면 `알림:` 줄로 요청한다 (11절 "노력 수준 변경 요청"). 사용자는 칸을 눌러 그 세션으로 가서 수준을 직접 바꾸고 그 세션에 "변경함"이라고 쓴다
 - If the level stops fitting mid-task, stop and propose again. Also propose anew whenever the kind of work changes (e.g. implement → review)
 - Levels: low = docs·progress tables·commits / medium = normal implementation·tests / high = design judgment·evaluation·review·debugging after repeated failure / xhigh+ = separate session on a higher model
 - Before recommending a level, check the current session's model (2026-11-14 user instruction, all projects). Write the model with the level ("Sonnet 5.5 기준 medium"). The table above fits the project's base model. On a higher model, recommend one level lower; raise it again if the same problem fails repeatedly. If the session model differs from the project's base model, say so first
@@ -67,14 +68,13 @@
 - Same problem fails 3 times → stop and present options. New ideas go to ROADMAP's parking lot, not straight into scope
 - Before working in a folder another session may be editing, check for it and coordinate via HANDOFF/ROADMAP instead of editing the same files at once
 
-## 결재함 (global, 2026-11-15 user instruction; full text: `~/.claude/docs/통합_작업방식.md` 11절)
-- 결정은 세션의 대화에서 한다. 결재함은 내용을 보여주고 그 세션으로 보낸다 (2026-11-15 방향 변경. 결재함에 답하는 버튼이 없다)
-- 모든 세션 (직접 연 세션, 하위 세션, 총괄 세션): 사용자의 답이 필요하면 평소처럼 자기 대화에 묻는다 (자료와 질문). 동시에 결재함에 칸 1개를 올린다: `~/.claude/decisions/<프로젝트>-<MMDD>-<HHMM>.json`을 Write 도구로 쓴다. 쓰기 전에 11절의 양식을 읽는다. 사용자를 기다리며 턴을 끝낼 때는 항상 올린다
-- 칸의 종류 (`grade`): `"나"` = 결재 (빨강. 되돌리기 어려운 결정. 그 작업을 멈춘다). `"알림"` = 알림 (노랑. 그 밖에 사용자가 이 세션에서 해야 하는 일: 노력 수준, push·삭제 등의 확인, 계획 승인, 화면 확인, 선택 카드, 되묻는 질문). `"가"` = 확인 (초록. 되돌리기 쉬운 결정을 추천안으로 이미 진행했다)
-- 칸은 짧게 쓴다: `question` 1문장, `background` 1~2줄, `options`는 선택지의 이름만. 전체 자료(근거, 선택지마다의 결과, 추천 이유)는 자기 대화에 쓴다. 사용자는 칸을 눌러 세션으로 와서 읽는다
-- 답은 대화에서 받는다. 사용자가 이 세션에 입력하면 mod가 이 세션의 결재·알림 칸을 내린다. `[결재함] 이 세션이 올린 칸을 결재함에서 내렸다: <번호>` 알림을 받으면: 그 결정 파일을 지운다 → 입력이 답이면 답대로 한다 (결재의 답은 `docs/결정_기록.md`에 쓴다) → 아직 기다리는 것이 있으면 새 번호로 다시 올린다
-- 확인(초록) 칸은 사용자가 결재함에서 "확인"을 눌러 내린다. 그 번호도 같은 알림으로 온다. 그때 파일을 지운다
-- 패널: 명령 `/decisions`. 칸을 누르면 펴진다. 다시 누르면 그 칸을 올린 세션으로 간다
+## 결재함 (global, 2026-11-15 user instruction, 판 2; full text: `~/.claude/docs/통합_작업방식.md` 11절)
+- 결재함은 사용자를 기다리는 세션을 모아 보인다. mod가 대화에서 칸을 뽑는다. 결정 파일을 쓰거나 지우지 않는다
+- 사용자의 답이 필요하면 대화에 자료와 질문을 쓴다. 평소처럼 묻는다
+- 되돌리기 어려운 결정이면 질문 앞에 `결재:`를 쓴다 (답의 줄, 선택 카드의 질문, 질문 상자의 질문)
+- 답이 필요한데 물음표로 끝나지 않는 요청이면 그 줄 앞에 `알림:`을 쓴다 (예: 노력 수준 변경 요청)
+- 추천안으로 이미 진행했으면 그 줄 앞에 `확인:`을 쓴다
+- 결재의 답은 자기 프로젝트의 `docs/결정_기록.md`에 쓴다. 없으면 만든다. 양식: `| 날짜 | 질문 | 답 (원문) |`
 
 ## 답변 문체 · 출력 형식 (global, 2026-10-26 user instruction)
 - 모든 답변은 ASD-STE100 규칙을 한국어에 적용해 쓴다. 필수 규칙:

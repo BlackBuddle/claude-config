@@ -4,7 +4,11 @@ type SlotProps = {
   id: string
   kind: 'request' | 'notice' | 'report'
   isBroken: boolean
+  // 사용자가 답했고 세션이 일한다. 흐리게 그린다 (2026-11-15 사용자 결정, Q3)
+  isBusy: boolean
   project: string
+  // 칸의 나이 ("3분 전"). 모르면 빈 글자
+  age: string
   question: string
   isOpen: boolean
 }
@@ -32,20 +36,20 @@ const Slot: ClientModule<SlotProps> = (props, surface) => {
   return (
     <Box flexDirection="column" gap="xs">
       <Box flexDirection="row" gap="sm">
-        <Text color={look.color} size="caption" weight="semibold">
-          ● {props.isBroken ? '오류' : look.label}
+        <Text color={look.color} size="caption" weight="semibold" dimColor={props.isBusy}>
+          ● {props.isBroken ? '오류' : props.isBusy ? '진행 중' : look.label}
         </Text>
         <Text size="caption">{props.project}</Text>
-        <Text dimColor mono size="caption">
-          {props.id}
+        <Text dimColor size="caption">
+          {props.age}
         </Text>
       </Box>
       {props.isOpen ? (
-        <Text weight="semibold" size="heading">
+        <Text weight="semibold" size="heading" dimColor={props.isBusy}>
           {props.question}
         </Text>
       ) : (
-        <Text dimColor={props.kind === 'report'}>{props.question}</Text>
+        <Text dimColor={props.kind === 'report' || props.isBusy}>{props.question}</Text>
       )}
     </Box>
   )
