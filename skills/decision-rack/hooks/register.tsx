@@ -3,9 +3,15 @@ import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
 import type { Decision } from '../types'
 
-const PANE = 'decision-rack'
-const TITLE = '결정 랙'
-const POLL_MS = 5000
+// 패널의 제목은 이 번호로 처음 열 때 정해진다. 제목을 바꾸면 이 번호도 바꾼다
+const PANE = 'approval-box'
+const TITLE = '결재함'
+// 취소 시간(3초)과 사라지는 시간(2초)을 지키려면 1초마다 본다. 폴더가 그대로이면 목록 1번만 읽는다
+const POLL_MS = 1000
+// 답한 뒤 이 시간 동안 취소할 수 있다. 이 시간이 지나야 답을 전달한다
+const CANCEL_MS = 3000
+// 취소 시간이 끝난 뒤 이 시간 동안 칸을 보여주고 없앤다
+const LINGER_MS = 2000
 const OPEN_AUTO = ''
 const OPTION_HOTKEYS = ['a', 's', 'd']
 const QUEUE_SUFFIX = '/.claude/decisions'
@@ -19,6 +25,7 @@ const units = atom({ plugin: 'decision-rack', key: 'units' } as const, [], {
 })
 const openId = atom({ plugin: 'decision-rack', key: 'openId' } as const, OPEN_AUTO)
 const notes = atom({ plugin: 'decision-rack', key: 'notes' } as const, {})
+const tick = atom({ plugin: 'decision-rack', key: 'tick' } as const, 0)
 
 // ── 계산: 입출력 없음 ──
 
@@ -42,6 +49,7 @@ function brokenUnit(path: string, why: string): Decision {
     reason: why,
     blocked: '',
     answer: '',
+    answeredAt: 0,
     isDelivered: false,
   }
 }
@@ -65,6 +73,7 @@ function parseDecision(path: string, text: string): Decision {
       reason: String(raw.reason ?? ''),
       blocked: String(raw.blocked ?? ''),
       answer: typeof raw.answer === 'string' ? raw.answer : '',
+      answeredAt: Number(raw.answeredAt) || 0,
       isDelivered: raw.delivered === true,
     }
   } catch (error) {
@@ -102,16 +111,38 @@ function pendingOf(list: Decision[]): Decision[] {
 function kindLabel(unit: Decision): string {
   if (unit.isBroken) return '오류'
 
-  return unit.isBlocking ? '결정 요청' : '확인 요청'
+  return unit.isBlocking ? '결재 요청' : '확인 요청'
 }
 
-function isMine(unit: Decision, sessionId: string): boolean {
-  return unit.session === sessionId && unit.answer !== '' && !unit.isDelivered
+// 이 세션의 사용자가 답해야 하는 새 결재 요청: 이 프로젝트의 것이고, 이 세션이 올린 것이 아니다
+function needsAttention(unit: Decision, project: string, sessionId: string): boolean {
+  return (
+    unit.isBlocking &&
+    !unit.isBroken &&
+    unit.answer === '' &&
+    unit.root !== '' &&
+    unit.root === project &&
+    unit.session !== sessionId
+  )
+}
+
+function canCancel(unit: Decision, now: number): boolean {
+  return unit.answer !== '' && !unit.isDelivered && now - unit.answeredAt < CANCEL_MS
+}
+
+// 취소 시간이 끝난 답만 전달한다
+function isMine(unit: Decision, sessionId: string, now: number): boolean {
+  return (
+    unit.session === sessionId &&
+    unit.answer !== '' &&
+    !unit.isDelivered &&
+    now - unit.answeredAt >= CANCEL_MS
+  )
 }
 
 function deliveryText(answered: Decision[]): string {
   return [
-    '[결정 랙] 사용자가 패널에서 결정에 답했다.',
+    '[결재함] 사용자가 패널에서 결정에 답했다.',
     ...answered.map(
       unit => `- 결정 ${unit.id}: ${unit.answer} (질문: ${unit.question}) 파일: ${unit.path}`,
     ),
@@ -125,29 +156,33 @@ function noteLine(unit: Decision, answer: string): string {
 
 function noteText(lines: string[]): string {
   return [
-    '[결정 랙] 사용자가 이 세션의 패널에서 아래 결정에 답했다. 참고용이다.',
+    '[결재함] 사용자가 이 세션의 패널에서 아래 결정에 답했다. 참고용이다.',
     '답은 결정을 올린 세션에 이미 전달됐다. 이 세션은 전달하지 않는다. 기록도 그 세션이 한다.',
     ...lines,
   ].join('\n')
 }
 
-function statusLabel(unit: Decision): string {
-  if (unit.isDelivered) return '전달함'
-
-  return unit.session === '' ? '답함 (받을 세션 없음)' : '답함'
+// 답한 결정은 취소 시간(3초)과 그 뒤 2초 동안만 보인다. 그 뒤에는 패널에서 없어진다
+function isVisible(unit: Decision, now: number): boolean {
+  return unit.answer === '' || now - unit.answeredAt < CANCEL_MS + LINGER_MS
 }
 
 // ── 입출력: 대기열 폴더 ──
 
 // 폴더가 바뀌지 않으면 파일을 다시 읽지 않는다. 리로드 뒤에는 한 번 다시 읽는다
 let lastSignature = '\0'
-// 5초 타이머와 클릭 직후의 읽기가 겹쳐도 같은 답을 2번 전달하지 않는다
+// 타이머와 클릭 직후의 읽기가 겹쳐도 같은 답을 2번 전달하지 않는다
 const sentIds = new Set<string>()
 
-async function queueDir($: EngineInterface): Promise<string> {
-  const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME')) ?? ''
+// 1초마다 쓴다. 그래서 한 번만 찾는다
+let cachedQueueDir: string | undefined
 
-  return `${slashed(home)}${QUEUE_SUFFIX}`
+async function queueDir($: EngineInterface): Promise<string> {
+  if (cachedQueueDir !== undefined) return cachedQueueDir
+  const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME')) ?? ''
+  cachedQueueDir = `${slashed(home)}${QUEUE_SUFFIX}`
+
+  return cachedQueueDir
 }
 
 // 워크트리의 세션도 같은 프로젝트로 묶는다. 그래서 git의 공용 폴더를 쓴다. git이 없으면 세션의 폴더다
@@ -181,6 +216,23 @@ async function openSessionLink($: EngineInterface, link: string): Promise<void> 
 
 // Client(slot.tsx)를 그리지 못하는 화면에서는 제목 버튼으로 대신한다
 let hasClientFault = false
+// 이미 알린 결재 요청. 같은 결정으로 패널을 2번 열지 않는다
+const announcedIds = new Set<string>()
+
+// 새 결재 요청이 오면 패널을 열고 알린다. 사용자는 명령을 치지 않는다
+async function announce($: EngineInterface, list: Decision[]): Promise<void> {
+  const project = await projectKey($)
+  const sessionId = await $.session.id()
+  const fresh = list.filter(
+    unit => needsAttention(unit, project, sessionId) && !announcedIds.has(unit.id),
+  )
+  if (fresh.length === 0) return
+
+  for (const unit of fresh) announcedIds.add(unit.id)
+  void $.ui.open({ id: PANE, title: TITLE })
+  void $.ui.toast(`결재 요청 ${fresh.length}개가 왔다`)
+}
+
 // 방금 편 칸과 그 시각. 접힌 칸을 더블 클릭해도 이동하지 않게 한다
 let lastOpened = { id: '', at: 0 }
 
@@ -193,9 +245,16 @@ async function patchFile(
 }
 
 // 이 세션이 올린 결정에 답이 생겼으면 이 세션에 넣는다
-async function deliver($: EngineInterface, list: Decision[]): Promise<boolean> {
+async function deliver($: EngineInterface, list: Decision[], now: number): Promise<boolean> {
   const sessionId = await $.session.id()
-  const answered = list.filter(unit => isMine(unit, sessionId) && !sentIds.has(unit.id))
+  const due = list.filter(unit => isMine(unit, sessionId, now) && !sentIds.has(unit.id))
+  if (due.length === 0) return false
+
+  // 목록은 최대 1초 전의 것이다. 그 사이에 사용자가 취소했으면 전달하지 않는다
+  const current = await Promise.all(
+    due.map(async unit => parseDecision(unit.path, await $.fs.read(unit.path).catch(() => ''))),
+  )
+  const answered = current.filter(unit => isMine(unit, sessionId, now))
   if (answered.length === 0) return false
 
   for (const unit of answered) sentIds.add(unit.id)
@@ -212,28 +271,40 @@ async function deliver($: EngineInterface, list: Decision[]): Promise<boolean> {
   return true
 }
 
+// 마지막으로 읽은 목록. 폴더가 그대로인 동안에도 시간에 따른 일(전달, 사라지기)을 한다
+let lastList: Decision[] = []
+// 앞의 읽기가 1초 안에 끝나지 않으면 타이머의 읽기가 겹친다. 겹친 읽기는 건너뛴다
+let isRefreshing = false
+
 async function refresh($: EngineInterface, isForced = false): Promise<void> {
   const dir = await queueDir($)
   try {
     const entries = (await $.fs.exists(dir)) ? await $.fs.list(dir) : []
     const files = entries.filter(f => f.kind === 'file' && f.name.endsWith('.json'))
     const signature = files.map(f => `${f.name}:${f.mtimeMs}`).join('|')
-    if (!isForced && signature === lastSignature) return
+    if (isForced || signature !== lastSignature) {
+      const list = await Promise.all(
+        files.map(async f => {
+          const path = `${dir}/${f.name}`
 
-    const list = await Promise.all(
-      files.map(async f => {
-        const path = `${dir}/${f.name}`
-
-        return parseDecision(path, await $.fs.read(path).catch(() => ''))
-      }),
-    )
-    await update($, units, () => list.sort(byUrgency))
-    lastSignature = signature
-    // 전달하면 파일이 바뀐다. 바로 다시 읽어서 패널에 "전달함"을 보여준다
-    if (await deliver($, list)) await refresh($, true)
+          return parseDecision(path, await $.fs.read(path).catch(() => ''))
+        }),
+      )
+      lastList = list.sort(byUrgency)
+      await update($, units, () => lastList)
+      lastSignature = signature
+      await announce($, lastList)
+    }
+    const now = await $.clock.now()
+    // 전달하면 파일이 바뀐다. 바로 다시 읽는다
+    if (await deliver($, lastList, now)) return await refresh($, true)
+    // 답한 칸이 보이는 동안에는 패널을 다시 그린다: 취소 버튼이 없어지고, 칸이 사라진다
+    const isSettling = lastList.some(unit => unit.answer !== '' && isVisible(unit, now - POLL_MS))
+    if (isSettling) await update($, tick, count => count + 1)
   } catch (error) {
     // 오류를 숨기면 패널이 "결정 없음"으로 보인다. 멈춘 작업을 사용자가 알 수 없다
     lastSignature = '\0'
+    lastList = []
     await update($, units, () => [brokenUnit(dir, String(error))])
   }
 }
@@ -244,12 +315,17 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'decisions',
-      description: '결정 랙 패널을 연다',
+      description: '결재함 패널을 연다',
     })
     await projectKey($)
     await refresh($)
-    $.clock.every(POLL_MS, () => void refresh($))
-    void $.ui.open({ id: PANE, title: TITLE })
+    $.clock.every(POLL_MS, () => {
+      if (isRefreshing) return
+      isRefreshing = true
+      void refresh($).finally(() => {
+        isRefreshing = false
+      })
+    })
 
     return next(e)
   })
@@ -258,7 +334,7 @@ export const register: Register = on => {
     await refresh($, true)
     await $.ui.open({ id: PANE, title: TITLE })
 
-    return { text: '결정 랙을 열었다.' }
+    return { text: '결재함을 열었다.' }
   })
 
   // 이 세션의 패널에서 답한 결정을 이 세션의 다음 입력에 붙인다. 총괄 세션의 AI가 추가 턴 없이 결정을 안다
@@ -293,7 +369,7 @@ export const register: Register = on => {
   on('tool.call', { tool: 'Edit' }, async ($, e, next) =>
     (await queueFile($, e)) === undefined
       ? next(e)
-      : { deny: '결정 파일은 고치지 않는다. Write로 새로 쓴다. 답은 사용자가 결정 랙 패널에서 고른다.' },
+      : { deny: '결정 파일은 고치지 않는다. Write로 새로 쓴다. 답은 사용자가 결재함 패널에서 고른다.' },
   )
 
   // 칸의 윗부분(slot.tsx)을 눌렀다: 접힌 칸은 편다. 펴진 칸은 그 결정을 올린 세션으로 이동한다
@@ -326,7 +402,9 @@ export const register: Register = on => {
     const table = $.ui.resolve(e)
     const { Box, Text, Button } = table
     const Client = !hasClientFault && 'Client' in table ? table.Client : undefined
-    const list = await read($, units)
+    await read($, tick)
+    const now = await $.clock.now()
+    const list = (await read($, units)).filter(unit => isVisible(unit, now))
     const sessionId = await $.session.id()
     const project = await projectKey($)
     const pending = pendingOf(list)
@@ -335,7 +413,8 @@ export const register: Register = on => {
     const others = list.filter(unit => !own.includes(unit))
 
     const choose = (picked: Decision[], answer: string) => async () => {
-      await Promise.all(picked.map(unit => patchFile($, unit.path, { answer })))
+      const answeredAt = await $.clock.now()
+      await Promise.all(picked.map(unit => patchFile($, unit.path, { answer, answeredAt })))
       // 이 세션이 올린 결정은 전달로 받는다. 참고 글에는 다른 세션의 결정만 넣는다
       const lines = picked
         .filter(unit => unit.session !== sessionId)
@@ -348,7 +427,9 @@ export const register: Register = on => {
     const cancel = (unit: Decision) => async () => {
       // 그 사이에 전달됐으면 취소하지 않는다
       const now = parseDecision(unit.path, await $.fs.read(unit.path))
-      if (!now.isDelivered) await patchFile($, unit.path, { answer: undefined })
+      if (!now.isDelivered) {
+        await patchFile($, unit.path, { answer: undefined, answeredAt: undefined })
+      }
       await update($, notes, lines =>
         Object.fromEntries(Object.entries(lines).filter(([id]) => id !== unit.id)),
       )
@@ -436,9 +517,9 @@ export const register: Register = on => {
         return slot(
           <Box flexDirection="row" justifyContent="space-between" alignItems="center">
             <Text dimColor>
-              {statusLabel(unit)} · {unit.answer} · {unit.question}
+              {canCancel(unit, now) ? '답함' : '완료'} · {unit.answer} · {unit.question}
             </Text>
-            {!unit.isDelivered && (
+            {canCancel(unit, now) && (
               <Button key={`${unit.id}:undo`} plain dimColor onPress={cancel(unit)}>
                 취소
               </Button>
@@ -504,7 +585,7 @@ export const register: Register = on => {
       return (
         <Box padding="md">
           <Text dimColor>
-            대기 중인 결정이 없다. 하위 세션이 결정을 올리면 여기에 쌓인다.
+            결재할 것이 없다. 하위 세션이 올리면 여기에 쌓인다.
           </Text>
         </Box>
       )

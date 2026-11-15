@@ -3,9 +3,9 @@ import { expect, test } from 'claude-code/testing'
 const PANE = {
   plugin: 'decision-rack',
   component: 'Pane',
-  requestId: 'decision-rack',
+  requestId: 'approval-box',
   props: {
-    title: '결정 랙',
+    title: '결재함',
     isFocused: false,
     bodyColumns: 40,
     placement: 'dock',
@@ -28,10 +28,20 @@ function fakeQueue(on: On, files: Record<string, string>) {
   )
   const submitted: string[] = []
   const contexts: string[] = []
-  const time = { now: 0 }
+  const time = { now: 100000 }
+  const opened: string[] = []
+  on('ui.toast', (_, e) => {
+    opened.push(`toast:${e.text}`)
+
+    return { value: {} as never }
+  })
   on('clock.now', () => ({ value: time.now }))
   on('command.register', () => ({ value: { command: 'decisions' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.open', () => {
+    opened.push('open')
+
+    return { value: { isPlaced: true } }
+  })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('session.id', () => ({ value: SESSION }))
   on('session.root', () => ({ value: '/Proj' }))
@@ -63,7 +73,7 @@ function fakeQueue(on: On, files: Record<string, string>) {
     return { text: e.text }
   })
 
-  return { files, submitted, contexts, time }
+  return { files, submitted, contexts, time, opened }
 }
 
 const stop = (extra: object = {}) =>
@@ -78,21 +88,23 @@ const stop = (extra: object = {}) =>
   })
 
 test('선택지를 누르면 답이 파일에 쓰인다. 취소하면 지워진다', async ($, on) => {
-  const { files, submitted, contexts } = fakeQueue(on, {
-    'Beot-1.json': stop(),
+  const { files, submitted, contexts, opened, time } = fakeQueue(on, {
+    'Beot-1.json': stop({ session: 'sub-session' }),
     'Beot-2.json': '{ 깨진 파일',
   })
 
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  // 이 프로젝트의 결재 요청이 없다. 패널은 스스로 열리지 않는다
+  expect(opened).toEqual([])
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
 
-  // 첫 번째 결정 요청 줄은 처음부터 열려 있다 (질문은 slot.tsx가 그린다). 깨진 파일은 오류 칸으로 보인다
+  // 첫 번째 결재 요청 줄은 처음부터 열려 있다 (질문은 slot.tsx가 그린다). 깨진 파일은 오류 칸으로 보인다
   expect(await ui.find({ type: 'Text', text: /멈춘 작업: DB 이전/ })).toBeTruthy()
   expect(await ui.find({ type: 'Text', text: /읽지 못했다/ })).toBeTruthy()
 
   await ui.press({ key: 'Beot-1:0' })
   expect(JSON.parse(files['Beot-1.json'] ?? '').answer).toBe('1번 (유지한다)')
-  expect(await ui.find({ type: 'Text', text: /답함 \(받을 세션 없음\) · 1번/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /답함 · 1번 \(유지한다\)/ })).toBeTruthy()
 
   // 이 세션의 다음 입력에 그 결정이 참고 글로 붙는다. 1번만 붙는다
   await $.prompt.submit({ text: '다음 작업' } as never)
@@ -104,6 +116,24 @@ test('선택지를 누르면 답이 파일에 쓰인다. 취소하면 지워진�
   expect('answer' in JSON.parse(files['Beot-1.json'] ?? '')).toBe(false)
   // 다른 값은 그대로다
   expect(JSON.parse(files['Beot-1.json'] ?? '').blocked).toBe('DB 이전')
+  // 다시 답한다. 3초 동안 취소할 수 있다. 그 뒤 2초가 지나면 칸이 없어진다
+  await ui.press({ key: 'Beot-1:0' })
+  time.now += 2900
+  await $.command.run({ command: 'decisions' } as never)
+  expect(await ui.find({ type: 'Button', key: 'Beot-1:undo' })).toBeTruthy()
+  time.now += 200
+  await $.command.run({ command: 'decisions' } as never)
+  expect(await ui.find({ type: 'Button', key: 'Beot-1:undo' })).toBeFalsy()
+  expect(await ui.find({ type: 'Text', text: /완료 · 1번 \(유지한다\)/ })).toBeTruthy()
+  // 완료 뒤 1초: 아직 보인다. 2초: 없어진다
+  time.now += 1000
+  await $.command.run({ command: 'decisions' } as never)
+  expect(await ui.find({ type: 'Text', text: /완료 · 1번 \(유지한다\)/ })).toBeTruthy()
+  time.now += 1000
+  await $.command.run({ command: 'decisions' } as never)
+  expect(await ui.find({ type: 'Text', text: /1번 \(유지한다\)/ })).toBeFalsy()
+  // 결재할 것이 없으면 빈 상태의 글을 보여준다 (깨진 파일의 오류 칸은 남는다)
+  expect(await ui.find({ type: 'Text', text: /읽지 못했다/ })).toBeTruthy()
   // 이 세션이 올린 결정이 아니다. 아무것도 넣지 않는다
   expect(submitted).toEqual(['다음 작업', '그 다음 작업'])
   await ui.unmount()
@@ -111,7 +141,8 @@ test('선택지를 누르면 답이 파일에 쓰인다. 취소하면 지워진�
 
 test('이 세션이 올린 결정의 답은 이 세션에 1번만 전달된다', async ($, on) => {
   const { files, submitted, time } = fakeQueue(on, {
-    'Beot-1.json': stop({ session: SESSION, answer: '2번 (바꾼다)' }),
+    // 3초 전에 답했다. 취소 시간이 끝났으므로 전달한다
+    'Beot-1.json': stop({ session: SESSION, answer: '2번 (바꾼다)', answeredAt: 90000 }),
     'JetDeck-1.json': stop({
       session: 'other-session',
       answer: '',
@@ -136,9 +167,9 @@ test('이 세션이 올린 결정의 답은 이 세션에 1번만 전달된다',
   expect(JSON.parse(files['Beot-1.json'] ?? '').delivered).toBe(true)
   expect('delivered' in JSON.parse(files['JetDeck-1.json'] ?? '')).toBe(false)
 
-  // 전달한 칸에는 취소가 없다
+  // 전달된 결정은 패널에서 없어진다
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await ui.find({ type: 'Text', text: /전달함 · 2번/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /2번 \(바꾼다\)/ })).toBeFalsy()
 
   const click = async (slot: string) => {
     await ui.pointer({ type: 'down', x: 1, y: 0, button: 'left', in: slot })
@@ -150,10 +181,10 @@ test('이 세션이 올린 결정의 답은 이 세션에 1번만 전달된다',
   await click('slot:JetDeck-1')
   expect(ran).toEqual([])
   // 더블 클릭의 두 번째 클릭은 이동이 아니다
-  time.now = 100
+  time.now += 100
   await click('slot:JetDeck-1')
   expect(ran).toEqual([])
-  time.now = 2000
+  time.now += 2000
   await click('slot:JetDeck-1')
   expect(ran).toEqual([
     ['rundll32', 'url.dll,FileProtocolHandler', 'claude://claude.ai/epitaxy/local_ab-12'],
@@ -162,7 +193,9 @@ test('이 세션이 올린 결정의 답은 이 세션에 1번만 전달된다',
 })
 
 test('세션이 결정 파일을 쓰면 mod가 세션 번호를 쓴다', async ($, on) => {
-  const { files } = fakeQueue(on, {
+  const { files, opened } = fakeQueue(on, {
+    // 이 프로젝트의 하위 세션이 올린 결재 요청
+    'Sub-1.json': stop({ root: '/proj', session: 'sub-session' }),
     // 세션이 답을 직접 써도 mod가 지운다
     'Beot-1.json': stop({ answer: '1번 (유지한다)', delivered: true }),
     'Other-1.json': stop({ root: '/else' }),
@@ -170,6 +203,8 @@ test('세션이 결정 파일을 쓰면 mod가 세션 번호를 쓴다', async (
   on('tool.call', () => ({ result: {} }))
 
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  // 새 결재 요청이 왔다. 패널이 스스로 열리고 알림이 뜬다
+  expect(opened).toEqual(['open', 'toast:결재 요청 1개가 왔다'])
   await $.tool.call({ tool: 'Write', file_path: `${DIR}/Beot-1.json`, content: stop() })
 
   expect(JSON.parse(files['Beot-1.json'] ?? '').session).toBe(SESSION)
@@ -190,7 +225,7 @@ test('세션이 결정 파일을 쓰면 mod가 세션 번호를 쓴다', async (
   // 패널은 이 프로젝트의 결정을 위에 묶는다
   await $.command.run({ command: 'decisions' } as never)
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await ui.find({ type: 'Text', text: /이 프로젝트 1/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /이 프로젝트 2/ })).toBeTruthy()
   expect(await ui.find({ type: 'Text', text: /다른 프로젝트 1/ })).toBeTruthy()
   await ui.unmount()
 })
