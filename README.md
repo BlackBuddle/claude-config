@@ -10,6 +10,7 @@ Claude Code 개인 설정 묶음. 다른 컴퓨터에 같은 환경을 만든다
 | `docs/` | 규칙의 본문 5개: 노력 수준, 작업 방식, 요약 시스템, 디자인 스킬 선택표, 검토 선택표 |
 | `agents/summarizer.md` | 요약 에이전트 |
 | `skills/stageshow/` | 로컬 스킬 (계정에 올리면 이 사본은 필요 없다) |
+| `skills/decision-rack/` | 결정 랙 패널 (mod). 하위 세션이 `~/.claude/decisions/`에 올린 결정을 우측 패널에 쌓아 보여준다. 명령: `/decisions`. 규칙: `docs/통합_작업방식.md` 11절 |
 | `hooks/reminder.txt` | 알림 훅의 문구. 메시지마다 Claude에게 규칙 4개를 알린다 |
 | `plugins-backup/` | 플러그인 본체의 사본 (`ponytail`, `egm`, `frontend-design`). 백업용이다. 설치는 명령으로 한다 |
 | `setup.ps1` | 설치 스크립트 |

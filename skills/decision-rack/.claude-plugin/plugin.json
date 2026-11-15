@@ -1,0 +1,6 @@
+{
+  "name": "decision-rack",
+  "version": "0.1.0",
+  "description": "하위 세션이 올린 결정 대기 항목을 우측 패널에 랙처럼 쌓아 보여준다",
+  "types": "./types/index.d.ts"
+}
