@@ -585,7 +585,7 @@ export const register: Register = on => {
       return (
         <Box padding="md">
           <Text dimColor>
-            결재할 것이 없다. 하위 세션이 올리면 여기에 쌓인다.
+            결재할 것이 없다. 세션이 결정을 올리면 여기에 쌓인다.
           </Text>
         </Box>
       )
