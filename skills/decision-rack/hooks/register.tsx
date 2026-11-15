@@ -6,6 +6,9 @@ import type { Decision } from '../types'
 // 패널의 제목은 이 번호로 처음 열 때 정해진다. 제목을 바꾸면 이 번호도 바꾼다
 const PANE = 'approval-box'
 const TITLE = '결재함'
+// 처음 열 때의 폭 (글자 칸 수). 요청일 뿐이다: 사용자가 끌어서 바꾼 폭이 있으면 앱은 그 폭을 쓴다
+// 49는 사용자가 패널을 끌어 놓은 폭을 잰 값이다 (2026-11-15. 대화 영역이 107칸일 때)
+const PANE_COLUMNS = 49
 // 취소 시간(3초)과 사라지는 시간(2초)을 지키려면 1초마다 본다. 폴더가 그대로이면 목록 1번만 읽는다
 const POLL_MS = 1000
 // 답한 뒤 이 시간 동안 취소할 수 있다. 이 시간이 지나야 답을 전달한다
@@ -33,6 +36,20 @@ function slashed(path: string): string {
   return path.replace(/\\/g, '/')
 }
 
+// 선택지는 글자 또는 { label, effect }다. 이전 양식(글자)도 그대로 읽는다
+function optionPart(option: unknown, part: 'label' | 'effect'): string {
+  if (typeof option !== 'object' || option === null) return part === 'label' ? String(option) : ''
+
+  return String((option as Record<string, unknown>)[part] ?? '')
+}
+
+// 배경은 글자 1개 또는 줄의 목록이다. 줄 앞의 글머리표는 패널이 그리므로 뗀다
+function backgroundLines(raw: unknown): string[] {
+  const lines = Array.isArray(raw) ? raw.map(String) : typeof raw === 'string' ? raw.split('\n') : []
+
+  return lines.map(line => line.replace(/^\s*[-*•]\s*/, '').trim()).filter(line => line !== '')
+}
+
 function brokenUnit(path: string, why: string): Decision {
   return {
     id: slashed(path).split('/').pop()?.replace(/\.json$/, '') ?? path,
@@ -45,6 +62,8 @@ function brokenUnit(path: string, why: string): Decision {
     isBroken: true,
     question: '읽지 못했다',
     options: [],
+    effects: [],
+    background: [],
     recommend: 0,
     reason: why,
     blocked: '',
@@ -68,7 +87,13 @@ function parseDecision(path: string, text: string): Decision {
       isBlocking: raw.grade === '나',
       isBroken: false,
       question: raw.question,
-      options: Array.isArray(raw.options) ? raw.options.map(String) : [],
+      options: Array.isArray(raw.options)
+        ? raw.options.map((option: unknown) => optionPart(option, 'label'))
+        : [],
+      effects: Array.isArray(raw.options)
+        ? raw.options.map((option: unknown) => optionPart(option, 'effect'))
+        : [],
+      background: backgroundLines(raw.background),
       recommend: Number.isInteger(raw.recommend) ? raw.recommend : 0,
       reason: String(raw.reason ?? ''),
       blocked: String(raw.blocked ?? ''),
@@ -140,13 +165,18 @@ function isMine(unit: Decision, sessionId: string, now: number): boolean {
   )
 }
 
+// 첫 줄은 규칙(11절)이 찾는 표시다. 바꾸지 않는다
+// 처리 방법은 규칙에 있다. 여기에는 결정마다 번호·답·질문만 쓴다. 파일은 대기열 폴더의 <번호>.json이다
 function deliveryText(answered: Decision[]): string {
   return [
     '[결재함] 사용자가 패널에서 결정에 답했다.',
-    ...answered.map(
-      unit => `- 결정 ${unit.id}: ${unit.answer} (질문: ${unit.question}) 파일: ${unit.path}`,
-    ),
-    '통합_작업방식 11절대로 한다: 파일의 answer 값을 확인한다. docs/결정_기록.md에 쓴다. 파일을 지운다. 작업을 계속한다.',
+    ...answered.flatMap(unit => [
+      '',
+      `**${unit.id}**: \`${unit.answer}\``,
+      `질문: ${unit.question}`,
+    ]),
+    '',
+    '처리: 통합_작업방식 11절 (파일의 answer 확인 → 결정_기록.md → 파일 삭제 → 계속)',
   ].join('\n')
 }
 
@@ -229,7 +259,7 @@ async function announce($: EngineInterface, list: Decision[]): Promise<void> {
   if (fresh.length === 0) return
 
   for (const unit of fresh) announcedIds.add(unit.id)
-  void $.ui.open({ id: PANE, title: TITLE })
+  void $.ui.open({ id: PANE, title: TITLE, columns: PANE_COLUMNS })
   void $.ui.toast(`결재 요청 ${fresh.length}개가 왔다`)
 }
 
@@ -242,6 +272,44 @@ async function patchFile(
   patch: Record<string, unknown>,
 ): Promise<void> {
   await $.fs.write(path, patchDecisionText(await $.fs.read(path), patch))
+}
+
+// 결정 파일에 쓰는 "올린 세션"의 표시: 답을 받을 세션, 프로젝트, 앱에서 여는 주소
+async function ownerStamp($: EngineInterface): Promise<Record<string, unknown>> {
+  const hostId = await $.env.get('CLAUDE_CODE_HOST_SESSION_ID')
+
+  return {
+    session: await $.session.id(),
+    root: await projectKey($),
+    link: hostId ? `${SESSION_LINK}${hostId}` : undefined,
+  }
+}
+
+// 이미 확인한 표시 없는 결정. 대화 기록을 결정마다 1번만 읽는다
+const claimCheckedIds = new Set<string>()
+
+// 표시가 없는 결정 중에서 이 세션이 쓴 것을 찾아 표시한다
+// mod를 읽기 전에 시작한 세션은 파일을 쓸 때 표시하지 못한다. mod를 다시 읽은 뒤에 여기서 채운다
+async function claimUnowned($: EngineInterface, list: Decision[]): Promise<boolean> {
+  const unowned = list.filter(
+    unit => unit.session === '' && !unit.isBroken && !claimCheckedIds.has(unit.id),
+  )
+  if (unowned.length === 0) return false
+
+  for (const unit of unowned) claimCheckedIds.add(unit.id)
+  const written = new Set(
+    (await $.session.messages())
+      .flatMap(message => message.toolUses)
+      .filter(use => use.tool === 'Write' && !use.isError)
+      .map(use => slashed(String(use.input.file_path)).toLowerCase()),
+  )
+  const mine = unowned.filter(unit => written.has(slashed(unit.path).toLowerCase()))
+  if (mine.length === 0) return false
+
+  const stamp = await ownerStamp($)
+  await Promise.all(mine.map(unit => patchFile($, unit.path, stamp)))
+
+  return true
 }
 
 // 이 세션이 올린 결정에 답이 생겼으면 이 세션에 넣는다
@@ -293,6 +361,8 @@ async function refresh($: EngineInterface, isForced = false): Promise<void> {
       lastList = list.sort(byUrgency)
       await update($, units, () => lastList)
       lastSignature = signature
+      // 표시하면 파일이 바뀐다. 바로 다시 읽는다
+      if (await claimUnowned($, lastList)) return await refresh($, true)
       await announce($, lastList)
     }
     const now = await $.clock.now()
@@ -317,6 +387,8 @@ export const register: Register = on => {
       name: 'decisions',
       description: '결재함 패널을 연다',
     })
+    // 결재함은 모든 세션에 늘 보인다. 결정이 없어도 연다
+    void $.ui.open({ id: PANE, title: TITLE, columns: PANE_COLUMNS })
     await projectKey($)
     await refresh($)
     $.clock.every(POLL_MS, () => {
@@ -332,7 +404,7 @@ export const register: Register = on => {
 
   on('command.run', { command: 'decisions' }, async $ => {
     await refresh($, true)
-    await $.ui.open({ id: PANE, title: TITLE })
+    await $.ui.open({ id: PANE, title: TITLE, columns: PANE_COLUMNS })
 
     return { text: '결재함을 열었다.' }
   })
@@ -351,11 +423,8 @@ export const register: Register = on => {
     const result = await next(e)
     const path = await queueFile($, e)
     if (path !== undefined) {
-      const hostId = await $.env.get('CLAUDE_CODE_HOST_SESSION_ID')
       await patchFile($, path, {
-        session: await $.session.id(),
-        root: await projectKey($),
-        link: hostId ? `${SESSION_LINK}${hostId}` : undefined,
+        ...(await ownerStamp($)),
         // 답은 사용자가 패널에서 누를 때만 생긴다. 세션이 쓴 답은 지운다
         answer: undefined,
         delivered: undefined,
@@ -438,22 +507,44 @@ export const register: Register = on => {
 
     const detail = (unit: Decision) => (
       <Box flexDirection="column" gap="md" paddingTop="sm">
-        {unit.blocked !== '' && <Text dimColor>멈춘 작업: {unit.blocked}</Text>}
+        {unit.background.length > 0 && (
+          <Box flexDirection="column" gap="xs">
+            <Text dimColor size="caption">
+              배경
+            </Text>
+            {unit.background.map(line => (
+              <Text>• {line}</Text>
+            ))}
+          </Box>
+        )}
+        {unit.session === '' && (
+          <Text color="warning" size="caption">
+            올린 세션을 모른다. 이동과 답의 전달이 안 된다. 그 세션에서 /reload-plugins를 입력한다.
+          </Text>
+        )}
         {unit.isBlocking ? (
           <Box flexDirection="column" gap="sm">
             {unit.options.map((label, i) => {
               const isRecommended = i + 1 === unit.recommend
+              const effect = unit.effects[i] ?? ''
 
               return (
-                <Button
-                  key={`${unit.id}:${i}`}
-                  hotkey={OPTION_HOTKEYS[i]}
-                  autoFocus={isRecommended || undefined}
-                  variant={isRecommended ? 'primary' : 'secondary'}
-                  onPress={choose([unit], `${i + 1}번 (${label})`)}
-                >
-                  {`${i + 1}번 ${label}${isRecommended ? ' · 추천' : ''}`}
-                </Button>
+                <Box flexDirection="column" gap="xs">
+                  <Button
+                    key={`${unit.id}:${i}`}
+                    hotkey={OPTION_HOTKEYS[i]}
+                    autoFocus={isRecommended || undefined}
+                    variant={isRecommended ? 'primary' : 'secondary'}
+                    onPress={choose([unit], `${i + 1}번 (${label})`)}
+                  >
+                    {`${i + 1}번 ${label}${isRecommended ? ' · 추천' : ''}`}
+                  </Button>
+                  {effect !== '' && (
+                    <Text dimColor size="caption">
+                      {effect}
+                    </Text>
+                  )}
+                </Box>
               )
             })}
           </Box>
@@ -465,11 +556,23 @@ export const register: Register = on => {
             </Button>
           </Box>
         )}
-        {unit.reason !== '' && (
-          <Text dimColor size="caption">
-            추천 이유: {unit.reason}
-          </Text>
-        )}
+        <Box flexDirection="column" gap="xs">
+          {unit.reason !== '' && (
+            <Text dimColor size="caption">
+              추천 이유: {unit.reason}
+            </Text>
+          )}
+          {unit.blocked !== '' && (
+            <Text dimColor size="caption">
+              멈춘 작업: {unit.blocked}
+            </Text>
+          )}
+          {unit.link !== '' && (
+            <Text dimColor size="caption">
+              전체 자료는 이 칸을 다시 누르면 열리는 세션에 있다.
+            </Text>
+          )}
+        </Box>
       </Box>
     )
 

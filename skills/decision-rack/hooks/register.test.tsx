@@ -30,6 +30,17 @@ function fakeQueue(on: On, files: Record<string, string>) {
   const contexts: string[] = []
   const time = { now: 100000 }
   const opened: string[] = []
+  // 이 세션의 대화 기록에 있는 Write 호출의 파일 경로
+  const wrote: string[] = []
+  on('session.messages', () => ({
+    value: [
+      {
+        role: 'assistant',
+        text: '',
+        toolUses: wrote.map(path => ({ tool_use_id: path, tool: 'Write', input: { file_path: path } })),
+      },
+    ] as never,
+  }))
   on('ui.toast', (_, e) => {
     opened.push(`toast:${e.text}`)
 
@@ -37,8 +48,8 @@ function fakeQueue(on: On, files: Record<string, string>) {
   })
   on('clock.now', () => ({ value: time.now }))
   on('command.register', () => ({ value: { command: 'decisions' } }))
-  on('ui.open', () => {
-    opened.push('open')
+  on('ui.open', (_, e) => {
+    opened.push(`open:${e.columns}`)
 
     return { value: { isPlaced: true } }
   })
@@ -73,7 +84,7 @@ function fakeQueue(on: On, files: Record<string, string>) {
     return { text: e.text }
   })
 
-  return { files, submitted, contexts, time, opened }
+  return { files, submitted, contexts, time, opened, wrote }
 }
 
 const stop = (extra: object = {}) =>
@@ -94,8 +105,8 @@ test('선택지를 누르면 답이 파일에 쓰인다. 취소하면 지워진�
   })
 
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
-  // 이 프로젝트의 결재 요청이 없다. 패널은 스스로 열리지 않는다
-  expect(opened).toEqual([])
+  // 이 프로젝트의 결재 요청이 없어도 세션을 시작하면 패널이 열린다. 알림은 없다
+  expect(opened).toEqual(['open:49'])
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
 
   // 첫 번째 결재 요청 줄은 처음부터 열려 있다 (질문은 slot.tsx가 그린다). 깨진 파일은 오류 칸으로 보인다
@@ -162,7 +173,9 @@ test('이 세션이 올린 결정의 답은 이 세션에 1번만 전달된다',
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
 
   expect(submitted.length).toBe(1)
-  expect(submitted[0]).toContain('결정 Beot-1: 2번 (바꾼다)')
+  expect(submitted[0]).toContain('**Beot-1**: `2번 (바꾼다)`\n질문: DB를 바꾸는가?')
+  // 전달 글은 6줄이다: 표시, 빈 줄, 번호와 답, 질문, 빈 줄, 처리
+  expect(submitted[0]?.split('\n').length).toBe(6)
   expect(submitted[0]).not.toContain('JetDeck-1')
   expect(JSON.parse(files['Beot-1.json'] ?? '').delivered).toBe(true)
   expect('delivered' in JSON.parse(files['JetDeck-1.json'] ?? '')).toBe(false)
@@ -203,8 +216,8 @@ test('세션이 결정 파일을 쓰면 mod가 세션 번호를 쓴다', async (
   on('tool.call', () => ({ result: {} }))
 
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
-  // 새 결재 요청이 왔다. 패널이 스스로 열리고 알림이 뜬다
-  expect(opened).toEqual(['open', 'toast:결재 요청 1개가 왔다'])
+  // 세션 시작이 패널을 연다. 새 결재 요청이 다시 열고 알림이 뜬다
+  expect(opened).toEqual(['open:49', 'open:49', 'toast:결재 요청 1개가 왔다'])
   await $.tool.call({ tool: 'Write', file_path: `${DIR}/Beot-1.json`, content: stop() })
 
   expect(JSON.parse(files['Beot-1.json'] ?? '').session).toBe(SESSION)
@@ -227,5 +240,43 @@ test('세션이 결정 파일을 쓰면 mod가 세션 번호를 쓴다', async (
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect(await ui.find({ type: 'Text', text: /이 프로젝트 2/ })).toBeTruthy()
   expect(await ui.find({ type: 'Text', text: /다른 프로젝트 1/ })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('mod를 늦게 읽은 세션은 자기가 쓴 결정을 찾아 표시한다', async ($, on) => {
+  const { files, wrote } = fakeQueue(on, {
+    // 표시가 없는 결정 2개. 이 세션의 대화 기록에는 Mine-1의 Write만 있다
+    'Mine-1.json': stop({
+      background: ['- 표가 3개다', '표마다 줄이 100개 이하다'],
+      options: [
+        { label: '유지한다', effect: '코드를 바꾸지 않는다' },
+        { label: '바꾼다', effect: '이전 스크립트가 필요하다' },
+      ],
+    }),
+    'Theirs-1.json': stop(),
+  })
+  wrote.push('C:\\Users\\x\\.claude\\decisions\\Mine-1.json')
+
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+
+  const mine = JSON.parse(files['Mine-1.json'] ?? '')
+  expect(mine.session).toBe(SESSION)
+  expect(mine.link).toBe('claude://claude.ai/epitaxy/local_abc')
+  expect(mine.root).toBe('/proj')
+  expect('session' in JSON.parse(files['Theirs-1.json'] ?? '')).toBe(false)
+
+  // 표시한 결정은 이 프로젝트의 묶음에 들어간다. 표시가 없는 결정은 이유를 보여준다
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /이 프로젝트 1/ })).toBeTruthy()
+  // 펴진 칸(Mine-1)은 배경과 선택지의 결과를 보여준다. 글머리표는 1개만 그린다
+  expect(await ui.find({ type: 'Text', text: /^• 표가 3개다$/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /이전 스크립트가 필요하다/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /전체 자료는 이 칸을 다시 누르면/ })).toBeTruthy()
+  // 선택지가 { label, effect }여도 답은 이전과 같은 형식이다
+  await ui.press({ key: 'Mine-1:1' })
+  expect(JSON.parse(files['Mine-1.json'] ?? '').answer).toBe('2번 (바꾼다)')
+  await ui.pointer({ type: 'down', x: 1, y: 0, button: 'left', in: 'slot:Theirs-1' })
+  await ui.pointer({ type: 'up', x: 1, y: 0, button: 'left', in: 'slot:Theirs-1' })
+  expect(await ui.find({ type: 'Text', text: /올린 세션을 모른다/ })).toBeTruthy()
   await ui.unmount()
 })

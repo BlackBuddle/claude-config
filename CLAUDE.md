@@ -51,6 +51,8 @@
 - Base model: set once per project by the user and written in the project CLAUDE.md. If none is written, ask at the start (recommend one + why). Recommend by: mostly implementation and docs with many sessions → Sonnet; mostly design judgment and review with few sessions → a higher model; only summarizing long material → Haiku (`summarizer`). Within the base model, change only the effort level
 - Every session (incl. sub-sessions) states the needed effort level + one-line reason BEFORE starting work
 - Do not start work until the user changes the effort level and confirms (e.g. "변경함"). Until then, reading only. After "변경함", check the real model and effort level with `get_session` (target `self`). If they differ from what you proposed, do not start; say so. Where that tool does not exist (terminal `claude`), write "확인하지 못했다" and proceed
+- 예외 (2026-11-15 사용자 지시): 실제 수준이 필요한 수준과 이미 같으면 확인을 기다리지 않는다. `get_session`으로 확인하고 "노력 수준은 <수준>이다. 필요한 수준과 같다."를 1줄로 쓴 뒤 시작한다. `get_session`이 없으면 이 예외를 쓰지 않는다
+- 수준이 다르면 요청을 결재함에도 올린다 (11절 "노력 수준 변경 요청". 나 등급, 선택지 없음). 결재함의 칸은 알림이다: 사용자는 칸을 눌러 그 세션으로 가서 수준을 직접 바꾸고 그 세션에 "변경함"이라고 쓴다
 - If the level stops fitting mid-task, stop and propose again. Also propose anew whenever the kind of work changes (e.g. implement → review)
 - Levels: low = docs·progress tables·commits / medium = normal implementation·tests / high = design judgment·evaluation·review·debugging after repeated failure / xhigh+ = separate session on a higher model
 - Before recommending a level, check the current session's model (2026-11-14 user instruction, all projects). Write the model with the level ("Sonnet 5.5 기준 medium"). The table above fits the project's base model. On a higher model, recommend one level lower; raise it again if the same problem fails repeatedly. If the session model differs from the project's base model, say so first
@@ -67,6 +69,7 @@
 
 ## 결정 대기열 (global, 2026-11-15 user instruction; full text: `~/.claude/docs/통합_작업방식.md` 11절)
 - 모든 세션은 사용자에게 결정을 직접 묻지 않는다 (직접 연 세션, 하위 세션, 총괄 세션. 2026-11-15 범위 확대). 결정 1개를 `~/.claude/decisions/<프로젝트>-<MMDD>-<HHMM>.json` 파일 1개로 쓴다 (Write 도구). 쓰기 전에 11절의 양식을 읽는다
+- 결정에는 자료를 붙인다: 전체 자료를 자기 대화에 먼저 쓴다 → 결정 파일의 `background`에 요약 3~6줄을 쓴다 → 선택지마다 `effect` 1줄을 쓴다. 사용자는 결재함의 칸만 보고 결정한다
 - 예외: push·삭제·릴리스·범위 변경 등 "늘 그 자리에서 확인받는 일"은 대기열로 보내지 않는다. 그 자리에서 확인받는다
 - 예외: 요청의 뜻을 되묻는 질문 (예: "어느 파일인가?")은 채팅에서 묻는다. 대기열은 가 등급·나 등급의 결정만 받는다
 - 가 등급 (되돌리기 쉽다): 추천안으로 진행한다. 파일은 확인 요청이다 (패널 표시: "확인 요청"). 나 등급 (설계·의존성·구현 방향, 패널 표시: "결재 요청"): 그 작업을 멈춘다. 막히지 않은 다른 작업을 계속한다

@@ -13,6 +13,10 @@ export type Decision = {
   isBroken: boolean
   question: string
   options: string[]
+  // 선택지마다 "고르면 일어나는 일" 1줄. options와 순서가 같다. 없으면 빈 문자열
+  effects: string[]
+  // 판단에 필요한 사실의 요약. 줄마다 1개. 없으면 빈 목록
+  background: string[]
   recommend: number
   reason: string
   blocked: string
