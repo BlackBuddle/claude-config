@@ -13,12 +13,18 @@ New-Item -ItemType Directory -Force $Target | Out-Null
 
 # Never overwrite this computer's CLAUDE.md. The shared rules go to CLAUDE.shared.md
 # and the local CLAUDE.md imports them with one "@" line, so local rules stay.
-Copy-Item (Join-Path $src 'CLAUDE.md') (Join-Path $Target 'CLAUDE.shared.md') -Force
 $main = Join-Path $Target 'CLAUDE.md'
 $import = '@CLAUDE.shared.md'
-if (-not (Test-Path $main) -or -not (Select-String -Path $main -SimpleMatch $import -Quiet)) {
-    Add-Content $main "`r`n$import" -Encoding utf8
-    Write-Host "Added import line to $main"
+# The source computer's CLAUDE.md IS the shared rules. Importing a copy there loads every rule twice.
+# shortcut: detects the source copy by its first line only. Use a marker file if a local CLAUDE.md ever starts with the same title.
+if ((Test-Path $main) -and ((Get-Content $main -TotalCount 1) -eq (Get-Content (Join-Path $src 'CLAUDE.md') -TotalCount 1))) {
+    Write-Host "$main is the source copy. Skipped CLAUDE.shared.md and the import line."
+} else {
+    Copy-Item (Join-Path $src 'CLAUDE.md') (Join-Path $Target 'CLAUDE.shared.md') -Force
+    if (-not (Test-Path $main) -or -not (Select-String -Path $main -SimpleMatch $import -Quiet)) {
+        Add-Content $main "`r`n$import" -Encoding utf8
+        Write-Host "Added import line to $main"
+    }
 }
 
 foreach ($d in 'docs', 'agents', 'skills', 'hooks') {
