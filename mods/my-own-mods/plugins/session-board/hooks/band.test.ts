@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { bandSvg, barsOf, dailyBudget, detailRows, fit, gauge, panelSvg } from './register'
+import { asksText, bandCatSvg, bandSvg, barsOf, dailyBudget, detailRows, fit, gauge, panelSvg } from './band'
 
 // 시안 3번과 같은 상태: 컨텍스트 31%, 주 15%(오늘 7/19%p), 턴 11초
 const sample: any = {
@@ -147,40 +147,26 @@ test('아주 좁아도 이상 칸은 남긴다', () => {
 })
 
 // 아래 플러그인(ponytail 등)이 이미 띠를 그리는 경우: 내 띠가 그것을 가리지 않고 함께 그려야 한다.
-// 글자 칸은 Svg 가 없는 화면(터미널)이 그린다. 데스크톱은 시안 3번의 이미지 밴드를 그린다.
-async function mountBand($: any, on: any, surface: 'terminal' | 'desktop') {
-  on('session.start', (_: any, e: any) => ({ cwd: e.cwd }))
-  on('agent.list', () => ({ value: [] }))
-  on('clock.every', () => ({ value: {} }) as any)
-  on('ui.render', ($: any, e: any) => {
-    const { Text } = $.ui.resolve(e) as any
-    return Text({ children: 'ponytail 띠' })
-  })
-  on('state.get', () => ({ value: undefined }))
-  await $.session.start({ cwd: '/', surface, isInteractive: true })
-  return $.ui.mount({ plugin: 'relay-band', component: 'AbovePrompt', surface, props: { hasSurvey: false, isCollapsed: false, isWorking: false, bodyColumns: 120, maxRows: 10 } } as any)
-}
-
-test('터미널 띠는 이미지 없이 글자 칸으로 그리고 아래 플러그인의 띠를 가리지 않는다', async ($, on) => {
-  const ui = await mountBand($, on, 'terminal')
-  expect(await ui.find({ type: 'Svg' })).toBeFalsy() // 터미널에는 Svg 가 없다
-  expect((await ui.find({ type: 'Text', text: /하위 0/ }))?.text).toBe('하위 0') // 이미지 대신 글자 칸
-  expect((await ui.find({ type: 'Text', text: /ponytail 띠/ }))?.text).toBe('ponytail 띠')
-  expect(await ui.find({ type: 'Button' })).toBeTruthy() // 줄 오른쪽 끝의 상세 버튼
-  await ui.unmount()
-})
-
-test('데스크톱 띠는 밴드 이미지와 상세 버튼을 그리고 아래 플러그인의 띠를 가리지 않는다', async ($, on) => {
-  const ui = await mountBand($, on, 'desktop')
-  expect(await ui.find({ type: 'Svg' })).toBeTruthy() // 밴드 이미지
-  expect((await ui.find({ type: 'Text', text: /ponytail 띠/ }))?.text).toBe('ponytail 띠')
-  expect(await ui.find({ type: 'Button' })).toBeTruthy()
-  await ui.unmount()
-})
-
 test('좁으면 마지막 단계에서 오류가 아닌 검증 칸을 숨긴다. 오류 검증 칸은 남긴다', () => {
   const warned = { ...sample, verify: { tone: 'warn', text: '⚠ 검증 못함 (도구 없음)' } }
   expect(bandSvg(warned, 100).svg).not.toContain('검증 못함')
   expect(bandSvg({ ...warned, verify: { tone: 'err', text: '✗ 검증 실패' } }, 100).svg).toContain('검증 실패')
   expect(bandSvg(warned, 3000).svg).toContain('검증 못함') // 넓으면 그대로 둔다
+})
+
+test('띠의 글은 0이 아닌 종류만 쓰고, 칸이 없으면 쓰지 않는다', () => {
+  expect(asksText({ request: 1, notice: 2, report: 0 })).toBe('결재 1 · 알림 2')
+  expect(asksText({ request: 0, notice: 0, report: 3 })).toBe('확인 3')
+  expect(asksText({ request: 0, notice: 0, report: 0 })).toBeNull()
+})
+
+test('터미널 띠 글자 칸에도 개수가 들어가고, 이상 칸이라 좁아도 남는다', () => {
+  const segs = [{ prio: 0, value: '✗ 결재 1 · 알림 2', level: 'err' as const }, { prio: 2, label: '하위', value: '0', level: 'mute' as const }, { prio: 9, label: '페이스', value: '+1%p 앞섬', level: 'mute' as const }]
+  expect(fit(segs, 24).map(s => s.prio)).toContain(0)
+})
+
+test('따로 그린 띠 그림에는 고양이가 없다', () => {
+  expect(bandSvg(sample, 2000, true).svg).not.toContain('<use href="#zz"')
+  expect(bandSvg(sample, 2000).svg).toContain('use href="#zz"')
+  expect(bandCatSvg('flag')).toContain('use href="#flag"')
 })

@@ -584,19 +584,25 @@ test('패널을 닫으면 입력창 위에 여는 단추가 생기고, 누르면
   await ui.unmount()
 })
 
-test('기다리는 칸이 있으면 띠에 "● 결재 1" 같은 단추가 패널이 열려 있어도 보이고, 누르면 패널을 연다', async ($, on) => {
-  const seen = fakeBoard(on, { 'a.json': file('a', { ask: OPEN_ASK('request') }), 'n.json': file('n', { ask: OPEN_ASK('notice') }), 'r.json': file('r', { state: 'running' }) })
+test('기다리는 칸이 있으면 "세션 ▸" 를 그리지 않는다 (개수 단추는 relay-band 고양이 옆에 있다). /session_board open 은 열려 있어도 닫지 않는다', async ($, on) => {
+  const seen = fakeBoard(on, { 'n.json': file('n', { ask: OPEN_ASK('notice') }) })
+  let closes = 0
+  on('ui.close', () => {
+    closes += 1
+    return { value: undefined } as any
+  })
+  on('ui.panes', () => ({ value: [{ id: 'session-board', isPlaced: true }] }) as any)
   on('ui.render', { component: 'AbovePrompt' }, ($: any, e: any) => $.ui.resolve(e).Text({ children: '아래 띠' }))
   await $.session.start(START)
+  await $.command.run({ command: 'session_board', args: '' } as any) // 닫는다
+  expect(closes).toBe(1)
   const ui = await $.ui.mount({ plugin: 'session-board', component: 'AbovePrompt', props: { hasSurvey: false, bodyColumns: 80, isWorking: false }, surface: 'desktop' } as any)
-  expect(await ui.find({ type: 'Button', text: /결재 1/ })).toBeTruthy()
-  expect(await ui.find({ type: 'Button', text: /알림 1/ })).toBeTruthy()
-  expect(await ui.find({ key: 'open-report' })).toBeFalsy() // 0인 종류는 쓰지 않는다
-  expect(await ui.find({ key: 'open-board' })).toBeFalsy() // 개수 단추가 있으면 "세션 ▸" 는 없다
-  const opens = seen.opens
-  await ui.press({ key: 'open-notice' })
-  expect(seen.opens).toBe(opens + 1)
+  expect(await ui.find({ key: 'open-board' })).toBeFalsy()
   await ui.unmount()
+  const opens = seen.opens
+  expect((await $.command.run({ command: 'session_board', args: 'open' } as any)).text).toBeUndefined() // 대화에 결과 글을 남기지 않는다
+  await $.command.run({ command: 'session_board', args: 'open' } as any) // 두 번 불러도 닫히지 않는다
+  expect([seen.opens - opens, closes]).toEqual([2, 1])
 })
 
 test('한 창: 하위 에이전트가 생기면 세션 보드 아래에 에이전트 칸이 붙고, 없으면 세션 보드만이다', async ($, on) => {
@@ -618,6 +624,44 @@ test('한 창: 하위 에이전트가 생기면 세션 보드 아래에 에이�
   expect((await ui.find({ type: 'Text', text: /● 실행 중/ }))?.text).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /^코드 탐색$/ }))?.text).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /Explore · 호출 2회 · Read/ }))?.text).toBeDefined()
+  await ui.unmount()
+})
+
+const BAND_PROPS = { hasSurvey: false, isCollapsed: false, isWorking: false, bodyColumns: 120, maxRows: 10 }
+
+test('띠: 데스크톱은 고양이 옆에 개수 단추(점과 숫자)를 두고, 누르면 명령 없이 패널을 직접 연다. 아래 띠를 가리지 않는다', async ($, on) => {
+  const seen = fakeBoard(on, { 'n.json': file('n', { ask: OPEN_ASK('notice') }) })
+  const commands: any[] = []
+  on('command.run', (_: any, e: any) => {
+    commands.push(e)
+    return { text: '' } as any
+  })
+  on('agent.list', () => ({ value: [] }) as any)
+  on('ui.render', { component: 'AbovePrompt' }, ($: any, e: any) => $.ui.resolve(e).Text({ children: 'ponytail 띠' }))
+  await $.session.start(START)
+  await turnOf($)('끝냈다.') // 띠는 턴 끝(tick)에 개수를 다시 센다
+  const ui = await $.ui.mount({ plugin: 'session-board', component: 'AbovePrompt', props: BAND_PROPS, surface: 'desktop' } as any)
+  expect(await ui.find({ key: 'catb' })).toBeTruthy()
+  expect(await ui.find({ key: 'open-notice' })).toBeTruthy()
+  expect(await ui.find({ type: 'Button', text: /^1$/ })).toBeTruthy() // 글자 없이 숫자만
+  expect((await ui.find({ type: 'Text', text: /ponytail 띠/ }))?.text).toBe('ponytail 띠')
+  const opens = seen.opens
+  await ui.press({ key: 'open-notice' })
+  expect(seen.opens).toBe(opens + 1)
+  expect(commands).toEqual([]) // 명령을 거치지 않는다: 대화에 명령 줄이 남지 않는다
+  await ui.unmount()
+})
+
+test('띠: 터미널은 그림 없이 글자 칸으로 그리고 개수도 글자로 넣는다', async ($, on) => {
+  fakeBoard(on, { 'n.json': file('n', { ask: OPEN_ASK('notice') }) })
+  on('agent.list', () => ({ value: [] }) as any)
+  on('ui.render', { component: 'AbovePrompt' }, ($: any, e: any) => $.ui.resolve(e).Text({ children: 'ponytail 띠' }))
+  await $.session.start({ ...START, surface: 'terminal' } as any)
+  await turnOf($)('끝냈다.')
+  const ui = await $.ui.mount({ plugin: 'session-board', component: 'AbovePrompt', props: BAND_PROPS, surface: 'terminal' } as any)
+  expect(await ui.find({ type: 'Svg' })).toBeFalsy()
+  expect((await ui.find({ type: 'Text', text: /하위 0/ }))?.text).toBe('하위 0')
+  expect((await ui.find({ type: 'Text', text: /알림 1/ }))?.text).toBeDefined()
   await ui.unmount()
 })
 

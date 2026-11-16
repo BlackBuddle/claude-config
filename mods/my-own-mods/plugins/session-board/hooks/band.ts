@@ -1,4 +1,4 @@
-// relay-band: 입력창 위의 통합 띠 한 줄.
+// band (옛 relay-band): 입력창 위의 통합 띠 한 줄. 맨 왼쪽 고양이 옆에 결재·알림·확인 개수 단추가 온다.
 //   검증 │ 하위 N │ 컨텍스트 % │ 주 % · 오늘 x/y │ 턴 │ 비용 │ 캐시 │ 날씨·추이 │ 페이스
 // 창이 좁으면 우선순위가 낮은 칸(번호가 큰 것)부터 숨긴다.
 // 호스트가 소스에서 on(...) 과 $.noun.method(...) 를 읽으므로 literal 로 쓰고, $ 를 받는 도우미는 최상위 함수로 둔다.
@@ -40,6 +40,15 @@ let turnStartedAt = 0
 let lastTurnSec: number | null = null
 let lastAnswerAt = 0
 let children = 0
+// 사용자를 기다리는 세션 수(결재·알림·확인). 띠의 고양이 옆에 단추로 보인다
+const NO_ASKS = { request: 0, notice: 0, report: 0 }
+let asks = NO_ASKS
+// 고양이 옆 개수 단추: 급한 순서, 테마의 뜻 색. 누르면 세션 보드 패널을 연다
+const ASK_KINDS = [
+  { key: 'request', label: '결재', color: 'error', level: 'err' },
+  { key: 'notice', label: '알림', color: 'warning', level: 'warn' },
+  { key: 'report', label: '확인', color: 'success', level: 'ok' },
+] as const
 let context: { percent: number; tokens: number; window: number } | null = null
 let costUsd: number | null = null
 let week: { percent: number; resetsAt?: string } | null = null
@@ -50,30 +59,66 @@ let lastUsageAt = 0
 let limitKinds: string[] = [] // 진단용: 엔진이 알려 준 한도 창의 종류
 let showDetail = false // "상세 ▾" 펼침 상태
 
-export const register: Register = on => {
-  on('session.start', async ($, e, next) => {
-    const result = await next(e)
-    ticker?.cancel()
-    ticker = $.clock.every(5000, () => tick($))
-    try {
-      applyUsage(await $.session.usage())
-      await trackDay($)
-    } catch {
-      // 사용량을 아직 못 읽어도 띠는 나머지 칸으로 뜬다
-    }
-    $.ui.invalidate('ui.render')
-    return result
-  })
+// 세션 보드 플러그인의 모듈이다. 다른 플러그인이면 띠 단추가 패널을 직접 못 열고 명령을 거쳐서 대화에 명령 줄이 남았다 (2026-11-16 사용자 보고)
+// 한 모듈은 같은 이벤트를 조건 없이 두 번 걸 수 없다. 그래서 session.start·prompt.submit·agent.spawn·turn.complete 의 일은 아래 함수로 두고 세션 보드 훅이 부른다
 
+// 결재·알림·확인 개수. 세션 보드(register.ts)가 메모리의 기록으로 센 값을 준다(예전처럼 기록 파일을 따로 읽어 같은 판정을 다시 하지 않는다)
+let askCounter: () => { request: number; notice: number; report: number } = () => NO_ASKS
+export function setAskCounter(count: () => { request: number; notice: number; report: number }) {
+  askCounter = count
+}
+
+/** 세션이 시작할 때: 5초 타이머를 걸고 사용량을 읽는다. */
+export async function bandStart($: any) {
+  ticker?.cancel()
+  ticker = $.clock.every(5000, () => tick($))
+  try {
+    applyUsage(await $.session.usage())
+    await trackDay($)
+  } catch {
+    // 사용량을 아직 못 읽어도 띠는 나머지 칸으로 뜬다
+  }
+  $.ui.invalidate('ui.render')
+}
+
+/** 사용자가 입력했다: 턴 시간을 재기 시작한다. */
+export async function bandPrompt($: any) {
+  turnStartedAt = await $.clock.now()
+}
+
+/** 하위 에이전트가 시작했다: 하위 수를 다시 센다. */
+export async function bandTick($: any) {
+  await tick($)
+}
+
+/** 턴이 끝났다: 턴 시간·캐시를 적고, 고친 파일을 검증한다. 하위 에이전트의 턴은 건너뛴다. */
+export async function bandTurnDone($: any, e: any) {
+  if (e.agentId) return
+  const now = await $.clock.now()
+  lastTurnSec = Math.round((now - turnStartedAt) / 1000)
+  lastAnswerAt = now
+  if (context) history = [...history, context.percent].slice(-HISTORY)
+  const files = [...edited].filter(f => f !== '')
+  edited = new Set()
+  if (files.length > 0) {
+    verifying = true
+    $.ui.invalidate('ui.render')
+    try {
+      verify = await runVerify($, files)
+    } finally {
+      verifying = false
+    }
+  } else {
+    verify = null
+  }
+  await tick($)
+}
+
+export const register: Register = on => {
   on('session.measure', async ($, e, next) => {
     applyUsage(e)
     await trackDay($)
     $.ui.invalidate('ui.render')
-    return next(e)
-  })
-
-  on('prompt.submit', async ($, e, next) => {
-    turnStartedAt = await $.clock.now()
     return next(e)
   })
 
@@ -84,36 +129,6 @@ export const register: Register = on => {
       return ran
     })
   }
-
-  on('agent.spawn', async ($, e, next) => {
-    const result = await next(e)
-    await tick($)
-    return result
-  })
-
-  on('turn.complete', async ($, e, next) => {
-    const result = await next(e)
-    if ((e as any).agentId) return result // 하위 에이전트의 턴은 건너뛴다
-    const now = await $.clock.now()
-    lastTurnSec = Math.round((now - turnStartedAt) / 1000)
-    lastAnswerAt = now
-    if (context) history = [...history, context.percent].slice(-HISTORY)
-    const files = [...edited].filter(f => f !== '')
-    edited = new Set()
-    if (files.length > 0) {
-      verifying = true
-      $.ui.invalidate('ui.render')
-      try {
-        verify = await runVerify($, files)
-      } finally {
-        verifying = false
-      }
-    } else {
-      verify = null
-    }
-    await tick($)
-    return result
-  })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const props: any = (e as any).props ?? {}
@@ -129,7 +144,14 @@ export const register: Register = on => {
     // 그림을 그릴 수 있는 화면(데스크톱)은 시안 3번대로 그린다: 흰 카드 안에 밴드 이미지, 오른쪽 끝에 "상세" 버튼, 펼치면 2×2 카드 이미지.
     if (typeof Svg === 'function' && (e as any).surface !== 'terminal') {
       const d = richData(Date.now(), props.isWorking === true)
-      const band = bandSvg(d, Math.max(300, cols * 8 - 140 - indent * 16))
+      // 고양이는 띠 그림에서 떼어 따로 그리고, 그 바로 옆에 누를 수 있는 개수 단추를 둔다 (2026-11-16 사용자 요청: 고양이 옆에 알림 숫자)
+      const kinds = ASK_KINDS.filter(k => asks[k.key] > 0)
+      const band = bandSvg(d, Math.max(200, cols * 8 - 140 - indent * 16 - 40 - kinds.length * 45), true)
+      // 앱이 단추 안 글자색을 지운다. 그래서 색 점은 단추 밖의 글자로 둔다
+      const askButtons = kinds.map(k =>
+        // 띠가 길어지지 않게 글자(결재·알림·확인) 없이 색 점과 숫자만 쓴다. 뜻은 색이 말한다 (2026-11-16 사용자 요청). 고양이와 붙지 않게 왼쪽을 띄운다
+        Box({ key: `ask-${k.key}`, flexShrink: 0, alignItems: 'center', paddingLeft: 1, children: [Text({ key: 'd', color: k.color, children: '●' }), Button({ key: `open-${k.key}`, label: String(asks[k.key]), plain: true, onPress: () => openBoard($) })] }),
+      )
       const alt = [d.context && `컨텍스트 ${d.context.percent}%`, d.week && `주간 ${Math.round(d.week.percent)}%`, d.turn && `턴 ${d.turn.text}`, `하위 ${d.children}`].filter(Boolean).join(', ')
       const row = Box({
         key: 'rb',
@@ -139,6 +161,8 @@ export const register: Register = on => {
         borderColor: B.line,
         children: [
           // 폭 계산이 실제 화면보다 넓게 나와도 "상세" 단추가 밀려나지 않게: 그림 칸만 줄어들고 단추 칸은 줄지 않는다
+          Box({ key: 'catb', flexShrink: 0, paddingLeft: 1, children: [Svg({ key: 'cat', source: bandCatSvg(d.mood ?? 'zz'), alt: '고양이', width: 36, height: 36 })] }),
+          ...askButtons,
           Box({ key: 'bandb', flexShrink: 1, minWidth: 0, children: [Svg({ key: 'band', source: band.svg, alt })] }),
           Box({ key: 'fill', flexGrow: 1 }),
           Box({ key: 'detailb', flexShrink: 0, children: [Button({ key: 'detail', label: `상세 ${showDetail ? '▴' : '▾'}`, variant: 'secondary', onPress: () => { showDetail = !showDetail; $.ui.invalidate('ui.render') } })] }),
@@ -210,6 +234,12 @@ export const register: Register = on => {
   })
 }
 
+/** 세션 보드 패널을 연다. 같은 플러그인이라 명령을 거치지 않는다(대화에 명령 줄이 남지 않는다). */
+async function openBoard($: any) {
+  // 세션 보드(register.ts)의 openPane 과 같은 id·제목·폭이다. 이미 열려 있으면 그대로 둔다
+  await $.ui.open({ id: 'session-board', title: '세션', columns: 40 })
+}
+
 async function tick($: any) {
   try {
     const list: any[] = await $.agent.list()
@@ -217,7 +247,14 @@ async function tick($: any) {
   } catch {
     // 목록을 못 읽으면 이전 값을 둔다
   }
+  asks = askCounter() // 세션 보드가 메모리에 가진 개수를 받는다
   $.ui.invalidate('ui.render')
+}
+
+/** 띠에 쓸 글: "결재 1 · 알림 2". 0인 종류는 쓰지 않고, 칸이 없으면 null. */
+export function asksText(a: { request: number; notice: number; report: number }): string | null {
+  const parts = ([['결재', a.request], ['알림', a.notice], ['확인', a.report]] as const).filter(([, n]) => n > 0).map(([label, n]) => `${label} ${n}`)
+  return parts.length > 0 ? parts.join(' · ') : null
 }
 
 function applyUsage(u: any) {
@@ -282,6 +319,13 @@ function buildSegs(now: number, isWorking: boolean): Seg[] {
   const segs: Seg[] = []
   if (verifying) segs.push({ prio: 1, value: '● 검증 중…', level: 'info' })
   else if (verify) segs.push({ prio: 1, value: verify.text, level: verify.state === 'ok' ? 'ok' : verify.state === 'fail' ? 'err' : 'warn' })
+
+  // 터미널 띠: 그림이 없어 단추 대신 글자 칸으로 쓴다. 이상 칸이라 좁아도 남는다
+  const waiting = asksText(asks)
+  if (waiting) {
+    const level: Level = ASK_KINDS.find(k => asks[k.key] > 0)?.level ?? 'ok'
+    segs.push({ prio: 0, value: mark(level, waiting), level })
+  }
 
 
   segs.push({ prio: 2, label: '하위', value: String(children), level: children > 0 ? 'info' : 'mute' })
@@ -432,7 +476,10 @@ const gaugeBar = (x: number, y: number, w: number, h: number, pct: number, fill:
   (mark === null ? '' : `<rect x="${x + (w * Math.min(100, mark)) / 100 - 1}" y="${y - 3}" width="2" height="${h + 6}" rx="1" fill="${B.ink}"/>`)
 
 /** 접힌 밴드: 시안 3번 1절. 폭이 모자라면 하위 → 턴 → 오늘 권장 순으로 숨긴다(컨텍스트·주간 게이지는 끝까지). */
-export function bandSvg(d: Rich, maxW: number): { svg: string; w: number; hidden: number } {
+/** 띠 왼쪽 끝의 고양이 하나(띠와 같은 크기 배율). 띠 그림과 떼어 두어야 그 옆에 단추를 놓을 수 있다. */
+export const bandCatSvg = (mood: 'run' | 'flag' | 'zz') => svgDoc(32, 32, catAvatar(mood, 16, 16), 1.12, CAT[mood])
+
+export function bandSvg(d: Rich, maxW: number, noCat = false): { svg: string; w: number; hidden: number } {
   const H = 32 // 얇게 잡고 Z 배로 키워 그린다: 높이는 약 36px, 글씨는 12% 커진다(시안은 52px 에 글씨가 작았다)
   const Z = 1.12
   const cy = 16
@@ -493,7 +540,7 @@ export function bandSvg(d: Rich, maxW: number): { svg: string; w: number; hidden
   let pick = shows.length - 1
   for (let i = 0; i < shows.length; i += 1) {
     const list = build(shows[i])
-    const total = list.reduce((n, it) => n + it.w, 0) + 18 * Math.max(0, list.length - 1) + 12 + 28 + 14 + 16
+    const total = list.reduce((n, it) => n + it.w, 0) + 18 * Math.max(0, list.length - 1) + 12 + (noCat ? 0 : 28 + 14) + 16
     if (total <= maxW / Z) {
       pick = i
       break
@@ -502,8 +549,9 @@ export function bandSvg(d: Rich, maxW: number): { svg: string; w: number; hidden
   const items = build(shows[pick])
   const mood = d.mood ?? 'zz'
   let x = 12
-  let body = catAvatar(mood, x + 14, cy) // 왼쪽 세로 막대 대신 상태별 고양이
-  x += 28 + 14
+  // 고양이는 왼쪽 세로 막대 대신 상태를 말한다. noCat 이면 띠 밖에서 따로 그린다(그 옆에 누를 수 있는 단추를 두려고)
+  let body = noCat ? '' : catAvatar(mood, x + 14, cy)
+  if (!noCat) x += 28 + 14
   items.forEach(it => {
     body += it.draw(x)
     x += it.w + 18
@@ -585,7 +633,7 @@ function richData(now: number, isWorking: boolean): Rich {
   const left = lastAnswerAt > 0 ? CACHE_MINUTES - Math.floor((now - lastAnswerAt) / 60_000) : null
   const cacheTone: Tone = left === null ? 'mute' : left <= 10 ? 'err' : left <= 20 ? 'warn' : 'mute'
   // 밴드 고양이: 일하는 중이면 달리고, 알릴 일(컨텍스트 75%↑, 캐시 경고, 검증 실패)이 있으면 깃발을 들고, 아니면 존다
-  const alert = (context?.percent ?? 0) >= 75 || (!isWorking && (cacheTone === 'err' || cacheTone === 'warn')) || verify?.state === 'fail'
+  const alert = (context?.percent ?? 0) >= 75 || (!isWorking && (cacheTone === 'err' || cacheTone === 'warn')) || verify?.state === 'fail' || asks.request + asks.notice > 0
   return {
     verify: verifying ? { tone: 'info', text: '● 검증 중…' } : verify ? { tone: verify.state === 'ok' ? 'ok' : verify.state === 'fail' ? 'err' : 'warn', text: verify.text } : null,
     children,

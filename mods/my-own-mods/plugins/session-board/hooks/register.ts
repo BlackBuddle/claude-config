@@ -12,6 +12,7 @@ import type { Mood } from './art'
 import { APP_ID_FORMAT, closable, countAsks, deadLabel, purgeable, groupOf, isDead, isNestedSession, judge, openAsk, openReport, optionsLine, orphanIds, parseAsk, parseReport } from './asks'
 import type { Ask, Group, Report } from './asks'
 import { countAgentCall, register as registerAgents, startAgentTicker } from './agents'
+import { bandPrompt, bandStart, bandTurnDone, register as registerBand, setAskCounter } from './band'
 import { register as registerGuard } from './guard'
 import { cardAsk, lastTurn, signalsOf } from './signals'
 import type { Signals } from './signals'
@@ -29,12 +30,6 @@ const MAX_BACKGROUND_LINES = 2 // 펴진 칸의 배경은 이 줄 수까지만 �
 const USER_ORIGINS = new Set(['composer', 'bridge', 'sdk'])
 // 사용자가 끝낸 세션만 결재·알림을 닫는다. 앱 종료(other)와 이어받기(resume)는 칸을 남기고 "세션 끝남"으로 보인다
 const CLOSING_ENDS = new Set(['prompt_input_exit', 'clear', 'logout'])
-// 입력창 위 띠의 개수 단추: 급한 순서, 테마의 뜻 색
-const BAND_KINDS = [
-  { key: 'request', label: '결재', color: 'error' },
-  { key: 'notice', label: '알림', color: 'warning' },
-  { key: 'report', label: '확인', color: 'success' },
-] as const
 
 export type State = 'running' | 'waiting' | 'idle' | 'ended'
 export type Rec = {
@@ -398,9 +393,13 @@ export const register: Register = (on, options) => {
   registerGuard(on, options)
   // 하위 에이전트 묶음도 같은 패널에 붙인다. 순서: 가드(맨 바깥, 카드는 맨 아래) → 에이전트 → 세션 보드(맨 위)
   registerAgents(on, options)
+  // 입력창 위 띠(옛 relay-band)도 이 플러그인이 그린다. 띠의 개수 단추가 패널을 직접 연다
+  registerBand(on, options)
+  setAskCounter(() => countAsks(board, Date.now()))
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     startAgentTicker($) // 하위 에이전트 칸의 고양이 움직임
+    await bandStart($) // 입력창 위 띠
     const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
     dir = home ? `${home}/.claude/session-board` : ''
     const cwd = await $.session.cwd()
@@ -434,15 +433,18 @@ export const register: Register = (on, options) => {
     return result
   })
 
-  on('command.run', { command: 'session_board' }, async $ => {
+  on('command.run', { command: 'session_board' }, async ($, e) => {
     // 그려지고 있으면 닫는다. 열어 두려 했지만 아직 못 그리는 중이면(좁은 창), 사용자가 시킨 열기로 다시 연다
-    if ((await $.ui.panes()).some(p => p.id === PANE_ID && p.isPlaced)) {
+    // "open" 이면 닫지 않고 열기만 한다: relay-band 띠의 고양이 옆 개수 단추가 이렇게 부른다
+    if (e.args.trim() !== 'open' && (await $.ui.panes()).some(p => p.id === PANE_ID && p.isPlaced)) {
       await $.ui.close({ id: PANE_ID })
       isOpen = false
       $.ui.invalidate('ui.render') // 입력창 위에 여는 단추를 보인다
       return { text: '세션 상태판을 닫았습니다.' }
     }
     const opened = await openPane($)
+    // "open" 은 띠 단추가 부른다. 결과 글을 내지 않아 대화에 줄이 남지 않게 한다 (2026-11-16 사용자 보고: 열 때마다 대화에 명령이 찍힌다)
+    if (e.args.trim() === 'open') return {}
     return { text: opened.isPlaced ? '세션 상태판을 열었습니다.' : '이 화면에는 패널을 놓을 자리가 없습니다.' }
   })
 
@@ -452,6 +454,7 @@ export const register: Register = (on, options) => {
     if (origin === undefined || USER_ORIGINS.has(origin)) isUserTurn = true
     // 새 세션의 첫 요청이 이름이 된다. 다른 세션이 보낸 지시도 첫 요청이면 이름이다(하위 세션은 그것이 할 일이다)
     if (me && me.title === '' && titleOf(e.text) !== '') await save($, { title: titleOf(e.text) })
+    await bandPrompt($) // 띠의 턴 시간
     return next(e)
   })
 
@@ -466,25 +469,18 @@ export const register: Register = (on, options) => {
   // 패널이 닫혀 있을 때만 입력창 위 띠 맨 끝에 여는 단추를 둔다. 열려 있으면 아무것도 그리지 않는다
   // 별도 띠를 두지 않기로 했지만(인계 문서), 닫힌 패널을 여는 길이 명령뿐이라 이 경우만 연다 (2026-11-16 사용자 결정)
   // 띠는 한 자리라서 아래 플러그인의 띠를 먼저 받아 함께 그린다 (relay-band 와 같은 방식)
-  // 사용자를 기다리는 칸이 있으면 "● 결재 1 · ● 알림 1" 단추를 그리고, 누르면 패널을 연다 (relay-band 의 개수 칸을 옮겨 왔다: 그 칸은 그림이라 누를 수 없었다)
-  // 기다리는 칸이 없으면 패널이 닫혀 있을 때만 "세션 ▸" 단추를 그린다
+  // 결재·알림·확인 개수는 띠(band.ts)의 고양이 옆 단추가 보인다. 그래서 여기서는 기다리는 칸이 없고 패널이 닫혀 있을 때만 "세션 ▸" 를 그린다
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const props: any = (e as any).props ?? {}
     const counts = countAsks(board, Date.now())
-    const kinds = BAND_KINDS.filter(k => counts[k.key] > 0)
-    if (props.hasSurvey || (kinds.length === 0 && isOpen)) return next(e)
+    const waiting = counts.request + counts.notice + counts.report > 0
+    if (props.hasSurvey || isOpen || waiting) return next(e)
     const beneath: any = await next(e)
-    const { Box, Text, Button } = $.ui.resolve(e) as any
-    // 앱이 단추 안 글자색을 지운다. 그래서 색 점은 단추 밖의 글자로 둔다 (결재함과 같은 방법)
-    const items = kinds.map(k =>
-      Box({ key: `count-${k.key}`, flexDirection: 'row', alignItems: 'center', children: [Text({ key: 'd', color: k.color, children: '●' }), Button({ key: `open-${k.key}`, label: `${k.label} ${counts[k.key]}`, plain: true, onPress: () => openPane($) })] }),
-    )
+    const { Box, Button } = $.ui.resolve(e) as any
     const mine = Box({
       key: 'session-board-open',
       flexDirection: 'row',
-      alignItems: 'center',
-      gap: 'sm',
-      children: [...items, Box({ key: 'fl', flexGrow: 1 }), kinds.length === 0 ? Button({ key: 'open-board', label: '세션 ▸', plain: true, onPress: () => openPane($) }) : null],
+      children: [Box({ key: 'fl', flexGrow: 1 }), Button({ key: 'open-board', label: '세션 ▸', plain: true, onPress: () => openPane($) })],
     })
     return beneath ? Box({ flexDirection: 'column', children: [Box({ key: 'beneath', flexDirection: 'column', children: [beneath] }), mine] }) : mine
   })
@@ -522,7 +518,9 @@ export const register: Register = (on, options) => {
       }
     } else await go($, 'idle')
     void readAppTitle($) // 앱은 첫 요청 뒤에 제목을 정한다. 찾을 때까지만 읽는다. 큰 파일은 PowerShell 이 느려 턴 끝을 기다리게 하지 않는다
-    return next(e)
+    const result = await next(e)
+    await bandTurnDone($, e) // 띠: 턴 시간·캐시, 고친 파일 검증 (옛 relay-band 처럼 턴의 결과 뒤에 한다)
+    return result
   })
 
   // 권한 확인은 tool.call 이 next 를 부른 뒤에 일어난다. 결과가 ask 면 승인 대화상자가 뜬다 → 승인 대기.

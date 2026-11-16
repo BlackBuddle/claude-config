@@ -454,7 +454,8 @@ async function measureRm($: any, risk: Risk, cwd: string): Promise<Report> {
   if (!found && hasVar(targets)) {
     return { summary: '지울 대상을 확인하지 못했습니다', lines: [], unknown: true, recover: [NOT_NONE], facts: [['원인', `변수 ${varName(targets)} 를 풀지 못했습니다`], ['또는', 'bash 를 찾지 못했습니다']] }
   }
-  if (!found) return { summary: `지울 것이 없음: ${targets.join(' ')} 와 맞는 파일이 없습니다`, lines: [], note: '경로가 없어서 rm 이 지울 것이 없습니다.' }
+  // 제목은 짧게 두고, 없는 경로는 마지막 이름만 흐린 줄에 쓴다 (2026-11-16 사용자 요청: 전체 경로까지 다 적을 필요 없다)
+  if (!found) return { summary: '지울 것이 없음', lines: [], note: `없는 경로: ${targets.map(t => t.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || t).join(', ')}` }
   if (!files) return { summary: `파일 없는 경로 ${found}개를 지웁니다`, lines: [], note: `경로: ${targets.join(' ')}` }
   return {
     summary: `파일 ${files}개 · ${size(bytes)} 삭제`,
@@ -1124,7 +1125,8 @@ export function draw(t: any, state: Held, compact = false, surface = 'desktop') 
       T({ key: 'hero', weight: 'semibold', wrap: 'wrap', children: report.summary }),
       ...(report.recover ?? []).map(([lv, text], i) => T({ key: `rec${i}`, color: rich ? RECOVER_RICH[lv] : RECOVER_COLOR[lv], dimColor: !rich && lv === 'mute', wrap: 'wrap', children: text })),
       // 시안 C(모름)에는 위치 줄이 없다. 영향을 잰 폴더는 잰 뒤에만 의미가 있다.
-      unknown ? null : Box({ key: 'where', flexDirection: 'column', children: [T({ key: 'k', dimColor: true, children: '위치' }), T({ key: 'v', mono: true, wrap: 'truncate-middle', children: state.cwd })] }),
+      // 위치는 지울 목록이 있을 때만 뜻이 있다. 지울 것이 없으면 줄을 줄이려고 뺀다
+      unknown || report.lines.length === 0 ? null : Box({ key: 'where', flexDirection: 'column', children: [T({ key: 'k', dimColor: true, children: '위치' }), T({ key: 'v', mono: true, wrap: 'truncate-middle', children: state.cwd })] }),
       ...(rich ? factRowsRich : boxed ? [] : factRows),
       list.length > 0 ? Box({ key: 'list', flexDirection: 'column', children: list }) : null,
       report.note ? T({ key: 'note', dimColor: true, italic: true, children: report.note, wrap: 'wrap' }) : null,

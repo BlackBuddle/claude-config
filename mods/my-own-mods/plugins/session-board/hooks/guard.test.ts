@@ -102,7 +102,11 @@ test('변수 경로·측정 실패·미리 셀 수 없는 명령은 모름으로
   // 변수가 없는 경로가 정말 없으면 지금처럼 "없음"을 말한다
   const missing = await measure(none, rm(['nothere']), '/')
   expect(missing.unknown).toBeUndefined()
-  expect(missing.summary).toContain('지울 것이 없음')
+  expect(missing.summary).toBe('지울 것이 없음') // 제목에는 경로를 쓰지 않는다
+  const deep = await measure(none, rm(['/c/a/b/없는폴더/']), '/')
+  expect(deep.note).toBe('없는 경로: 없는폴더') // 마지막 이름만 흐린 줄에 쓴다
+  const json = JSON.stringify(draw(fake, held(deep) as any))
+  expect(json).not.toContain('"위치"') // 지울 목록이 없으면 위치 줄도 없다
 
   const psNone = { process: { run: async () => ({ stdout: '0 0\n', stderr: '', exitCode: 0 }) } }
   const ps = await measure(psNone, { kind: 'ps-remove', label: 'Remove-Item -Recurse', targets: ['$env:TEMP\\x'] }, '/')

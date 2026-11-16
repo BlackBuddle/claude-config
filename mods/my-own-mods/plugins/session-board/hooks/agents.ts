@@ -7,6 +7,8 @@
 
 import type { Register } from 'claude-code'
 
+import { bandTick } from './band'
+
 // 세션 보드와 같은 패널을 쓴다
 const PANE_ID = 'session-board'
 // 고양이 프레임 간격. 설계는 140ms 였지만 갱신 비용을 아직 못 재서 250ms 로 시작한다. 부드러우면 줄이고, 버거우면 늘린다.
@@ -337,6 +339,7 @@ export const register: Register = on => {
       }
       $.ui.invalidate('ui.render')
     }
+    await bandTick($) // 띠의 "하위 N" 도 다시 센다 (한 모듈은 agent.spawn 을 조건 없이 두 번 걸 수 없다)
     return result
   })
 

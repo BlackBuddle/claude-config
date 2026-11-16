@@ -1,20 +1,18 @@
 {
   "name": "my-own-mods",
-  "owner": { "name": "Dawnilove", "url": "https://github.com/Dawnilove" },
-  "metadata": { "description": "릴레이형 작업(설계, 구현, 리뷰, 인계)을 위한 Claude Code 모드, 스킬, 에이전트." },
+  "owner": {
+    "name": "Dawnilove",
+    "url": "https://github.com/Dawnilove"
+  },
+  "metadata": {
+    "description": "릴레이형 작업(설계, 구현, 리뷰, 인계)을 위한 Claude Code 모드, 스킬, 에이전트."
+  },
   "plugins": [
     {
       "name": "session-board",
       "source": "./plugins/session-board",
-      "description": "Mod: 오른쪽 패널 하나에 세션 상태와 결재·알림·확인, 하위 에이전트, 위험 명령 확인 카드(옛 edit-guard)를 모아 보여줍니다. 입력창 위 결재·알림 단추로 패널을 엽니다.",
-      "version": "0.4.0",
-      "category": "mod"
-    },
-    {
-      "name": "relay-band",
-      "source": "./plugins/relay-band",
-      "description": "Mod: 입력창 위 한 줄 띠. 검증 결과, 하위 에이전트 수, 컨텍스트, 주간 한도와 오늘 권장량, 캐시 등을 보여줍니다.",
-      "version": "0.1.2",
+      "description": "Mod: 오른쪽 패널 하나에 세션 상태·결재·알림·확인, 하위 에이전트, 위험 명령 확인 카드(옛 edit-guard)를 모으고, 입력창 위 띠(옛 relay-band)에 컨텍스트·주간 한도와 고양이 옆 결재·알림 단추를 보여줍니다.",
+      "version": "0.5.0",
       "category": "mod"
     },
     {

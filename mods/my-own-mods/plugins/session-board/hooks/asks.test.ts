@@ -99,8 +99,7 @@ test('띠의 개수는 사용자를 기다리는 칸만 센다. 진행 중과 �
   expect(countAsks(list, NOW)).toEqual({ request: 1, notice: 2, report: 1 })
 })
 
-// 판정 기대값 표. relay-band 의 register.test.ts 에 같은 표가 있다(띠의 개수 countBoard). 모드끼리 import 할 수 없어 표를 두 곳에 둔다.
-// 한쪽 판정을 바꾸면 그쪽 시험이 깨진다. 그때 두 표와 두 판정을 같이 고친다. [기록, 결재·알림·확인 중 세는 곳(없으면 '')]
+// 판정 기대값 표: 띠의 개수 단추가 이 countAsks 값을 그대로 보인다. [기록, 결재·알림·확인 중 세는 곳(없으면 '')]
 const R = (at = NOW - 1000) => ask({ at })
 const N = () => ask({ kind: 'notice' })
 const SHARED_CASES: [Partial<Watch>, string][] = [
@@ -118,7 +117,7 @@ const SHARED_CASES: [Partial<Watch>, string][] = [
   [{}, ''],
 ]
 
-test('띠의 개수는 relay-band 와 같은 판정 기대값 표를 따른다', () => {
+test('띠의 개수는 판정 기대값 표를 따른다', () => {
   for (const [p, kind] of SHARED_CASES) {
     const want = { request: 0, notice: 0, report: 0, ...(kind ? { [kind]: 1 } : {}) }
     expect([p, countAsks([watch(p)], NOW)]).toEqual([p, want])
