@@ -32,9 +32,17 @@ Claude Code 개인 설정 묶음. 다른 컴퓨터에 같은 환경을 만든다
 gh repo clone Dawnilove/claude-config "$env:USERPROFILE\claude-config"; powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\claude-config\setup.ps1"
 ```
 
-끝난 뒤 Claude Code를 다시 시작한다.
+끝난 뒤 Claude Code와 데스크톱 앱을 **완전히 종료하고 다시 시작한다.** 환경 변수(6단계)는 새로 시작한 프로세스부터 적용된다. 창만 닫으면 앱이 백그라운드에 남아 적용되지 않는다.
+
+주의: 저장소가 비공개라서 `gh auth login`을 하지 않으면 `gh repo clone`이 실패한다. 설치 명령은 한 줄이다. 따로 `git pull`을 하지 않는다. 폴더가 아직 없기 때문이다.
 
 다른 방법: Claude Code에 "Dawnilove/claude-config 저장소를 받아 README대로 설치해 줘"라고 말한다.
+
+`CLAUDE_CODE_PLUGIN_DIRS`에 다른 값이 이미 있으면 스크립트가 경고만 하고 바꾸지 않는다. 그때는 아래 명령으로 직접 정한 뒤 앱을 다시 시작한다.
+
+```powershell
+[Environment]::SetEnvironmentVariable('CLAUDE_CODE_PLUGIN_DIRS', "$env:USERPROFILE\claude-config\mods\my-own-mods\plugins", 'User')
+```
 
 ### 2-3. 스크립트가 하는 일
 
@@ -54,6 +62,11 @@ gh repo clone Dawnilove/claude-config "$env:USERPROFILE\claude-config"; powershe
 2. `/anthropic-skills:prototype`를 입력한다. 응답이 나오면 계정 스킬이 작동한다.
 3. 플러그인 목록을 본다: `claude plugin list`
 4. 작은 코딩 작업을 시킨다. Claude가 작업 전에 노력 수준을 말하고, 작업 끝에 검토 명령을 제안하면 정상이다.
+5. 내 모드를 확인한다. 다시 시작한 Claude Code(데스크톱 앱)에서 아래를 본다.
+   - 환경 변수: PowerShell에서 `[Environment]::GetEnvironmentVariable('CLAUDE_CODE_PLUGIN_DIRS','User')`를 실행한다. `...\claude-config\mods\my-own-mods\plugins`가 나오면 정상이다.
+   - 오른쪽에 `세션` 패널이 열리고, 입력창 위에 고양이 띠가 보인다. 패널은 `/session_board`로 열고 닫는다.
+   - 입력창에 `/handoff`를 입력하면 자동 완성에 나온다.
+   - 보이지 않으면 앱을 완전히 종료했다가 다시 시작한다. 그래도 없으면 7절을 본다.
 
 ## 3. 저장소의 변경을 다른 컴퓨터에 적용한다
 
