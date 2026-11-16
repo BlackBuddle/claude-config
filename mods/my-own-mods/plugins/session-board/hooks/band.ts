@@ -64,8 +64,14 @@ let showDetail = false // "상세 ▾" 펼침 상태
 
 // 결재·알림·확인 개수. 세션 보드(register.ts)가 메모리의 기록으로 센 값을 준다(예전처럼 기록 파일을 따로 읽어 같은 판정을 다시 하지 않는다)
 let askCounter: () => { request: number; notice: number; report: number } = () => NO_ASKS
-export function setAskCounter(count: () => { request: number; notice: number; report: number }) {
+// 세션 보드 패널이 닫혀 있는가. 닫혀 있으면 띠 안에 여는 단추를 둔다(예전에는 세션 보드가 띠 위에 따로 한 줄을 그렸다)
+let isBoardClosed: () => boolean = () => false
+// 띠가 패널을 연 뒤 세션 보드에 알린다. 알리지 않으면 세션 보드는 계속 닫힌 줄 알아 "세션 ▸" 가 남는다
+let markBoardOpen: () => void = () => undefined
+export function setAskCounter(count: () => { request: number; notice: number; report: number }, closed: () => boolean, opened: () => void) {
   askCounter = count
+  isBoardClosed = closed
+  markBoardOpen = opened
 }
 
 /** 세션이 시작할 때: 5초 타이머를 걸고 사용량을 읽는다. */
@@ -161,7 +167,9 @@ export const register: Register = on => {
         })
       })
       // 알약이 여러 개여도 여는 단추는 하나다. 한 글자 plain 단추는 글자 자체가 단추로 그려진다
-      const openButton = kinds.length > 0 ? Box({ key: 'ask-open', flexShrink: 0, alignItems: 'center', children: [Button({ key: 'open-asks', label: '▸', plain: true, dimColor: true, onPress: () => openBoard($) })] }) : null
+      // 기다리는 칸이 없어도 패널이 닫혀 있으면 같은 자리에 "세션 ▸" 를 둔다: 띠 위에 따로 줄을 만들지 않는다 (2026-11-16 사용자 보고)
+      const openLabel = kinds.length > 0 ? '▸' : isBoardClosed() ? '세션 ▸' : ''
+      const openButton = openLabel !== '' ? Box({ key: 'ask-open', flexShrink: 0, alignItems: 'center', paddingLeft: kinds.length > 0 ? 0 : 1, children: [Button({ key: kinds.length > 0 ? 'open-asks' : 'open-board', label: openLabel, plain: true, dimColor: true, onPress: () => openBoard($) })] }) : null
       const alt = [d.context && `컨텍스트 ${d.context.percent}%`, d.week && `주간 ${Math.round(d.week.percent)}%`, d.turn && `턴 ${d.turn.text}`, `하위 ${d.children}`].filter(Boolean).join(', ')
       const row = Box({
         key: 'rb',
@@ -214,6 +222,8 @@ export const register: Register = on => {
       })
       const children: any[] = [Box({ key: `${key}cells`, gap: 3, flexShrink: 1, children: cells })]
       children.push(Box({ key: `${key}fill`, flexGrow: 1 }))
+      // 터미널: 패널이 닫혀 있으면 상세 앞에 여는 단추를 둔다
+      if (isBoardClosed()) children.push(Button({ key: 'open-board', label: '세션 ▸', plain: true, dimColor: true, onPress: () => openBoard($) }))
       children.push(
         Button({
           key: `${key}detail`,
@@ -249,6 +259,8 @@ export const register: Register = on => {
 async function openBoard($: any) {
   // 세션 보드(register.ts)의 openPane 과 같은 id·제목·폭이다. 이미 열려 있으면 그대로 둔다
   await $.ui.open({ id: 'session-board', title: '세션', columns: 40 })
+  markBoardOpen()
+  $.ui.invalidate('ui.render') // "세션 ▸" 를 띠에서 지운다
 }
 
 async function tick($: any) {

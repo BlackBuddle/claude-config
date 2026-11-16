@@ -395,7 +395,13 @@ export const register: Register = (on, options) => {
   registerAgents(on, options)
   // 입력창 위 띠(옛 relay-band)도 이 플러그인이 그린다. 띠의 개수 단추가 패널을 직접 연다
   registerBand(on, options)
-  setAskCounter(() => countAsks(board, Date.now()))
+  setAskCounter(
+    () => countAsks(board, Date.now()),
+    () => !isOpen,
+    () => {
+      isOpen = true
+    },
+  )
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     startAgentTicker($) // 하위 에이전트 칸의 고양이 움직임
@@ -466,24 +472,7 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // 패널이 닫혀 있을 때만 입력창 위 띠 맨 끝에 여는 단추를 둔다. 열려 있으면 아무것도 그리지 않는다
-  // 별도 띠를 두지 않기로 했지만(인계 문서), 닫힌 패널을 여는 길이 명령뿐이라 이 경우만 연다 (2026-11-16 사용자 결정)
-  // 띠는 한 자리라서 아래 플러그인의 띠를 먼저 받아 함께 그린다 (relay-band 와 같은 방식)
-  // 결재·알림·확인 개수는 띠(band.ts)의 고양이 옆 단추가 보인다. 그래서 여기서는 기다리는 칸이 없고 패널이 닫혀 있을 때만 "세션 ▸" 를 그린다
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const props: any = (e as any).props ?? {}
-    const counts = countAsks(board, Date.now())
-    const waiting = counts.request + counts.notice + counts.report > 0
-    if (props.hasSurvey || isOpen || waiting) return next(e)
-    const beneath: any = await next(e)
-    const { Box, Button } = $.ui.resolve(e) as any
-    const mine = Box({
-      key: 'session-board-open',
-      flexDirection: 'row',
-      children: [Box({ key: 'fl', flexGrow: 1 }), Button({ key: 'open-board', label: '세션 ▸', plain: true, onPress: () => openPane($) })],
-    })
-    return beneath ? Box({ flexDirection: 'column', children: [Box({ key: 'beneath', flexDirection: 'column', children: [beneath] }), mine] }) : mine
-  })
+  // 닫힌 패널을 여는 "세션 ▸" 는 띠(band.ts) 안, 고양이 옆 알약 자리에 있다. 띠 위에 따로 줄을 그리지 않는다
 
   on('turn.start', async ($, e, next) => {
     if (me && e.agentId === undefined) {
