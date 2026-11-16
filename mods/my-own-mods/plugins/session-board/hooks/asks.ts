@@ -21,7 +21,7 @@ export type Phase = 'running' | 'waiting' | 'idle' | 'ended'
 export type Watch = Marks & { state: Phase; updatedAt: number }
 
 // 급한 순서. 이 순서로 묶고 이 순서로 보인다
-export type Group = 'request' | 'notice' | 'report' | 'running' | 'idle' | 'hidden'
+export type Group = 'request' | 'notice' | 'report' | 'running' | 'hidden'
 
 export function clipQuestion(text: string): string {
   return text.length > MAX_QUESTION_CHARS ? `${text.slice(0, MAX_QUESTION_CHARS)}…` : text
@@ -59,7 +59,8 @@ export function groupOf(r: Watch, now: number): Group {
   // 권한 승인 대기는 알림과 같게 센다
   if (r.state === 'waiting') return 'notice'
   if (report) return 'report'
-  return r.state
+  // 쉬는 세션은 보이지 않는다: 기다리는 것과 일하는 것만 보인다. 세션 목록은 앱 사이드바에 있다 (2026-11-16 사용자 결정)
+  return r.state === 'running' ? 'running' : 'hidden'
 }
 
 /**

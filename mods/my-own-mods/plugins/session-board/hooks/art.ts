@@ -22,7 +22,7 @@ export function barSvg(done: number, total: number, color: string, w = 160): str
 }
 
 // 고양이는 agent-panel 의 캐릭터에서 상태 셋(달리는 / 깃발 든 / 조는)만 작은 조각으로 옮겨 왔다.
-const P = { indigoText: '#3F5BEF', amberText: '#92400E', mute: '#B6BACF' }
+const P = { indigoText: '#3F5BEF', amberText: '#92400E' }
 // 그림 글자의 폭(px) 어림. 띠(band.ts)도 이것을 쓴다
 export const isWide = (ch: string) => /[ᄀ-ᇿ⺀-꓏가-힣豈-﫿＀-｠]/.test(ch)
 export const tw = (s: string, size: number, mono = false, bold = false) => [...s].reduce((n, ch) => n + (isWide(ch) ? size : size * (mono ? 0.6 : 0.56)) * (bold && !mono ? 1.05 : 1), 0)
@@ -42,7 +42,6 @@ const SKIN: Record<Mood, Skin> = {
   request: { bubble: '#FFE4E8', text: '#BE123C', bead: '#F43F5E', cat: 'flag', alt: '깃발 든' },
   notice: { bubble: '#FEF3C7', text: P.amberText, bead: C.amber, cat: 'flag', alt: '깃발 든' },
   report: { bubble: '#DEF5ED', text: '#047857', bead: '#10B981', cat: 'flag', alt: '깃발 든' },
-  idle: { bubble: '#EEF0F8', text: C.dim, bead: P.mute, cat: 'zz', alt: '조는' },
 }
 // 24x24 도트 고양이(agent-panel 에서 옮김). 같은 색 칸을 path 하나로 합쳐 줄였다.
 export const CAT = {
@@ -74,8 +73,7 @@ export function headOf(r: Rec, g: Mood, now: number): Head {
     return { label: `${KIND_LABEL[g]}${ask && now - ask.at > OLD_ASK_MS ? ' 낡음' : ''}`, color, time: dur(ask?.at ?? r.since) + steps, dim: false }
   }
   if (g === 'report') return { label: '확인', color: 'success', time: dur(report?.at ?? r.since) + steps, dim: false }
-  if (g === 'running') return { label: '작업 중', color: 'suggestion', time: (r.turnStartedAt !== null ? dur(r.turnStartedAt) : '') + steps, dim: false }
-  return { label: '쉬는 중', color: undefined, time: dur(r.since) + steps, dim: true }
+  return { label: '작업 중', color: 'suggestion', time: (r.turnStartedAt !== null ? dur(r.turnStartedAt) : '') + steps, dim: false }
 }
 
 export { C, SKIN, clip }

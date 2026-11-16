@@ -19,14 +19,14 @@ test('대화에서 신호를 뽑는다: 결재·알림·확인 표시 줄, 마�
   expect(signalsOf('', [{ tool_use_id: '', tool: 'AskUserQuestion', input: { questions: [{ question: '결재: 바꾸는가?', options: [] }] } } as never]).kind).toBe('request')
 })
 
-test('묶음은 결재 → 알림 → 확인 → 진행 중 → 유휴 순이고, 진행 중이면 이미 답한 것이다', () => {
+test('묶음은 결재 → 알림 → 확인 → 진행 중 순이고 쉬는 세션은 숨기며, 진행 중이면 이미 답한 것이다', () => {
   expect(groupOf(watch({ ask: ask() }), NOW)).toBe('request')
   expect(groupOf(watch({ ask: ask({ kind: 'notice' }) }), NOW)).toBe('notice')
   expect(groupOf(watch({ report: { lines: ['a'], at: NOW } }), NOW)).toBe('report')
   expect(groupOf(watch({ ask: ask(), report: { lines: ['a'], at: NOW } }), NOW)).toBe('request') // 둘 다 있으면 급한 쪽
   expect(groupOf(watch({ state: 'running', ask: ask() }), NOW)).toBe('running') // 결재함의 busy
   expect(groupOf(watch({ state: 'waiting' }), NOW)).toBe('notice') // 권한 승인 대기는 알림과 합친다
-  expect(groupOf(watch(), NOW)).toBe('idle')
+  expect(groupOf(watch(), NOW)).toBe('hidden') // 쉬는 세션은 보이지 않는다 (2026-11-16 사용자 결정)
 })
 
 test('끝났거나 기록이 끊긴 세션도 칸이 있으면 남고, 칸이 없으면 숨긴다. 닫은 칸은 숨긴다', () => {
@@ -36,7 +36,7 @@ test('끝났거나 기록이 끊긴 세션도 칸이 있으면 남고, 칸이 �
   expect(groupOf(watch({ state: 'running', updatedAt: NOW - STALE_MS - 1, ask: ask({ kind: 'notice' }) }), NOW)).toBe('notice')
   const closed = watch({ ask: ask({ at: 5 }), askClosedAt: 5 })
   expect(openAsk(closed)).toBeNull()
-  expect(groupOf(closed, NOW)).toBe('idle')
+  expect(groupOf(closed, NOW)).toBe('hidden')
 })
 
 test('정리: 하루 안 된 파일은 남기고, 열린 칸이 있으면 7일까지 남긴다. 깨진 파일은 하루 뒤에 지운다', () => {

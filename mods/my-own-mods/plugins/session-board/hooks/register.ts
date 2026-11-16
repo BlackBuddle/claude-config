@@ -1,4 +1,4 @@
-// session-board: 여러 세션의 상태를 오른쪽 패널에 모아 보여 준다. 진행 중 / 응답 대기 / 완료·유휴.
+// session-board: 여러 세션의 상태를 오른쪽 패널에 모아 보여 준다. 결재·알림·확인 / 진행 중. 쉬는 세션은 보이지 않는다.
 // 모드는 세션마다 따로 돌고 다른 세션 목록을 주는 API 가 없다. 그래서 세션마다 자기 상태를 파일 하나에 쓰고,
 // 패널이 그 폴더를 읽어 모은다. 세션 하나가 파일 하나만 쓰므로 쓰기가 겹치지 않는다.
 // 왼쪽 사이드바 항목에는 모드가 그릴 수 없다. 뱃지는 패널 안 카드에 단다.
@@ -722,19 +722,18 @@ function desktopBoard($: any, t: any, sections: { g: (typeof GROUPS)[number]; ro
   })
 }
 
-// 급한 순서(결재 → 알림 → 확인 → 진행 중 → 유휴)로 묶는다. bg·fg 는 터미널 알약의 색이다
+// 급한 순서(결재 → 알림 → 확인 → 진행 중)로 묶는다. bg·fg 는 터미널 알약의 색이다
 const GROUPS = [
   { key: 'request', title: '결재', bg: SKIN.request.bead, fg: C.white },
   { key: 'notice', title: '알림', bg: C.amber, fg: C.ink },
   { key: 'report', title: '확인', bg: SKIN.report.bead, fg: C.white },
   { key: 'running', title: '진행 중', bg: C.indigo, fg: C.white },
-  { key: 'idle', title: '완료·유휴', bg: C.soft, fg: C.dim },
 ] as const
 
 // 흰 카드 하나. 이름 / 뱃지 줄 / 진척 막대 / 지금 하는 단계 / (펴지면) 내용.
 function card($: any, Box: any, Text: any, Svg: any, Button: any, r: Rec, g: Mood, now: number) {
   const gd = GROUPS.find(x => x.key === g)!
-  const tone = g === 'idle' ? C.dim : gd.bg
+  const tone = gd.bg
   const pillText = gd.fg
   const pillBg = gd.bg
   const isMe = me?.id === r.id
@@ -752,7 +751,7 @@ function card($: any, Box: any, Text: any, Svg: any, Button: any, r: Rec, g: Moo
         : Text({ key: 'bar', color: tone, children: `${'█'.repeat(Math.round((10 * r.done) / r.total))}${'░'.repeat(10 - Math.round((10 * r.done) / r.total))}` }),
     )
   }
-  if (g !== 'idle' && r.step !== '') children.push(Text({ key: 'step', color: C.dim, wrap: 'truncate-end', children: `지금: ${r.step}` }))
+  if (r.step !== '') children.push(Text({ key: 'step', color: C.dim, wrap: 'truncate-end', children: `지금: ${r.step}` }))
   if (openId === r.id) children.push(detailBox($, { Box, Text, Button }, r, now, isMe))
-  return Box({ key: r.id, flexDirection: 'column', backgroundColor: C.white, borderStyle: 'round', borderColor: g === 'idle' || g === 'running' ? C.line : tone, paddingX: 1, children })
+  return Box({ key: r.id, flexDirection: 'column', backgroundColor: C.white, borderStyle: 'round', borderColor: g === 'running' ? C.line : tone, paddingX: 1, children })
 }

@@ -7,7 +7,6 @@ const rec = (p: Partial<Rec> = {}): Rec => ({ id: 's1', name: '프로젝트', st
 
 test('칸 머리글은 상태 글자·뜻 색·시간이고, 작업 목록이 있으면 단계를 붙인다', () => {
   expect(headOf(rec({ state: 'running', turnStartedAt: NOW - 252_000, done: 3, total: 7 }), 'running', NOW)).toEqual({ label: '작업 중', color: 'suggestion', time: '4분 12초 · 3/7 단계', dim: false })
-  expect(headOf(rec({ state: 'idle', since: NOW - 11_000 }), 'idle', NOW)).toEqual({ label: '쉬는 중', color: undefined, time: '11초', dim: true })
   expect(headOf(rec({ state: 'waiting', waitFor: 'Bash 승인', since: NOW - 65_000 }), 'notice', NOW)).toMatchObject({ label: 'Bash 승인 대기', color: 'warning', time: '1분 05초' })
   const ask = { kind: 'request' as const, question: 'q', background: [], options: [], at: NOW - 60_000 }
   expect(headOf(rec({ ask }), 'request', NOW)).toMatchObject({ label: '결재', color: 'error', time: '1분 00초' })
@@ -20,7 +19,6 @@ test('칸 머리글은 상태 글자·뜻 색·시간이고, 작업 목록이 �
 test('고양이 아바타는 상태마다 다르고, 앱 링크는 앱 세션 번호로 만든다', () => {
   expect(avatarSvg('running')).toContain('use href="#run"')
   for (const g of ['request', 'notice', 'report'] as const) expect(avatarSvg(g)).toContain('use href="#flag"') // 사용자를 기다리는 세 묶음은 깃발 든 고양이
-  expect(avatarSvg('idle')).toContain('use href="#zz"')
   expect(avatarSvg('running')).not.toContain('id="flag"') // 필요한 고양이 하나만 담는다
   expect(appLink(rec({ appId: 'local_abc-123' }))).toBe('claude://claude.ai/epitaxy/local_abc-123')
   expect(appLink(rec())).toBeNull() // 이전 버전 기록에는 번호가 없다
@@ -176,8 +174,9 @@ test('내 상태를 파일에 쓰고, 패널은 다른 세션 기록과 함께 �
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'session-board', component: 'Pane', requestId: 'session-board', props: { title: '세션', isFocused: false, bodyColumns: 60, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} }, surface } as any)
     if (surface === 'terminal') {
+      // 쉬는 내 세션(1/3 단계)은 보이지 않는다. 일하는 다른 세션만 보인다
       const found = await Promise.all([/2\/5 단계/, /1\/3 단계/, /지금: 시험 실행/].map(async text => (await ui.find({ type: 'Text', text }))?.text !== undefined))
-      expect([surface, ...found]).toEqual([surface, true, true, true])
+      expect([surface, ...found]).toEqual([surface, true, false, true])
       expect(await ui.find({ type: 'Button', text: /다른 프로젝트/ })).toBeTruthy() // 이름은 누르면 펴지는 단추다
     } else {
       // 데스크톱은 세션마다 얇은 칸이다. 고양이는 그림, 머리글은 글자다
@@ -478,9 +477,6 @@ test('줄 이름은 앱 사이드바의 세션 제목이다. 제목을 모르면
   await $.prompt.submit({ text: '세션 보드 고치기\n자세한 내용', origin: { kind: 'composer' } } as any)
   await $.prompt.submit({ text: '두 번째 요청', origin: { kind: 'composer' } } as any)
   expect(JSON.parse(files['me.json']!).title).toBe('세션 보드 고치기')
-  const ui = await mount($, 'terminal')
-  expect(await ui.find({ type: 'Button', text: /세션 보드 고치기/ })).toBeTruthy()
-  await ui.unmount()
   // 다시 연 세션은 대화의 첫 요청에서 이름을 다시 만든다
   seen.messages = [{ role: 'user', text: '처음 요청', toolUses: [], toolResults: [] }, { role: 'assistant', text: '네', toolUses: [] }]
   await $.session.start(START)
@@ -596,7 +592,7 @@ test('한 창: 하위 에이전트가 생기면 세션 보드 아래에 에이�
   await $.tool.call({ tool: 'Grep', agentId: 'a1' } as any)
   await $.tool.call({ tool: 'Read', agentId: 'a1' } as any)
   ui = await mount($)
-  expect((await ui.find({ type: 'Text', text: /● 쉬는 중/ }))?.text).toBeDefined() // 위: 세션 보드
+  expect((await ui.find({ type: 'Text', text: /표시할 세션이 없습니다/ }))?.text).toBeDefined() // 위: 세션 보드 (쉬는 세션은 보이지 않는다)
   expect((await ui.find({ type: 'Text', text: /^하위 에이전트 1 · 호출 2회$/ }))?.text).toBeDefined() // 아래: 에이전트 묶음
   expect((await ui.find({ type: 'Text', text: /● 실행 중/ }))?.text).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /^코드 탐색$/ }))?.text).toBeDefined()
