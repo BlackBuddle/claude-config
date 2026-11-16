@@ -14,7 +14,6 @@ import type { Register } from 'claude-code'
 const PANE_ID = 'session-board'
 const HOLD_LIMIT_MS = 10 * 60 * 1000
 const LIST_MAX = 10
-const POLL_MS = 250
 
 // unknown: 영향 범위를 알 수 없는 경우. "없음"으로 단정하지 않고 모름 패널로 그린다.
 // recover: 되돌릴 수 있는지, 단계(err/warn/mute)와 문구. 알 수 없으면 비운다.

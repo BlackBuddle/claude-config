@@ -184,19 +184,21 @@ export const register: Register = on => {
           Box({ key: 'catb', flexShrink: 0, paddingLeft: 1, children: [Svg({ key: 'cat', source: bandCatSvg(d.mood ?? 'zz'), alt: '고양이', width: 36, height: 36 })] }),
           ...askButtons,
           openButton,
-          Box({ key: 'bandb', flexShrink: 1, minWidth: 0, children: [Svg({ key: 'band', source: band.svg, alt })] }),
+          Box({ key: 'bandb', flexShrink: 1, minWidth: 0, children: [Svg({ key: 'band', source: band.svg, alt, ...sizeOf(band.svg) })] }),
           Box({ key: 'fill', flexGrow: 1 }),
           Box({ key: 'detailb', flexShrink: 0, children: [Button({ key: 'detail', label: `상세 ${showDetail ? '▴' : '▾'}`, variant: 'secondary', onPress: () => { showDetail = !showDetail; $.ui.invalidate('ui.render') } })] }),
         ],
       })
       const panel = showDetail ? panelSvg(d) : null
+      // 크기를 안 주면 넓은 패널에서 이미지가 폭에 맞춰 커진다. 원래 폭(800)을 넘지 않게, 좁으면 화면 폭에 맞춰 비율대로 줄인다
+      const panelW = panel ? Math.min(panel.w, Math.max(320, cols * 8 - 24 - indent * 16)) : 0
       const mineRich = Box({
         key: 'relay',
         flexDirection: 'column',
         gap: 0, // 밴드와 상세 카드 사이 빈 줄을 없애 채팅창 위 막대가 스크롤 없이 들어오게 한다
         paddingLeft: indent,
         paddingRight: indent,
-        children: [row, panel ? Svg({ key: 'panel', source: panel.svg, alt: `상세: ${alt}` }) : null],
+        children: [row, panel ? Svg({ key: 'panel', source: panel.svg, alt: `상세: ${alt}`, width: panelW, height: Math.round((panel.h * panelW) / panel.w) }) : null],
       })
       return beneath ? Box({ flexDirection: 'column', children: [Box({ key: 'beneath', flexDirection: 'column', children: [beneath] }), mineRich] }) : mineRich
     }
@@ -471,6 +473,11 @@ const splitMono = (runs: Run[]): Run[] => runs.flatMap(r => (r.mono ? r.t.split(
 const rs = (runs: Run[], x: number, y: number, size: number, anchor = '') =>
   `<text x="${x}" y="${y}" font-size="${size}" xml:space="preserve"${anchor ? ` text-anchor="${anchor}"` : ''}>${splitMono(runs).map(r => `<tspan fill="${r.fill}" font-family="${r.mono ? MONO : SANS}" font-weight="${r.weight ?? 400}">${xml(r.t)}</tspan>`).join('')}</text>`
 const rsW = (runs: Run[], size: number) => runs.reduce((n, r) => n + tw(r.t, size, r.mono, (r.weight ?? 400) >= 600), 0)
+/** 그림의 원래 크기(width·height 속성). Svg 에 그대로 넘겨 패널 폭에 맞춰 커지지 않게 한다. */
+const sizeOf = (svg: string): { width?: number; height?: number } => {
+  const m = /<svg[^>]*\swidth="([\d.]+)"[^>]*\sheight="([\d.]+)"/.exec(svg)
+  return m ? { width: Math.round(Number(m[1])), height: Math.round(Number(m[2])) } : {}
+}
 const svgDoc = (w: number, h: number, body: string, z = 1, extra = '') =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${w * z}" height="${h * z}" viewBox="0 0 ${w} ${h}"><defs><linearGradient id="gi" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${B.accent}"/><stop offset="1" stop-color="${B.accent2}"/></linearGradient><linearGradient id="gd" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${B.accent}"/><stop offset="1" stop-color="${B.accent2}"/></linearGradient><linearGradient id="gv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${B.accent}"/><stop offset="1" stop-color="${B.accent2}"/></linearGradient><linearGradient id="gs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${B.accent}" stop-opacity=".45"/><stop offset="1" stop-color="${B.accent}" stop-opacity="0"/></linearGradient>${extra}</defs>${body}</svg>`
 /** 컨텍스트 색 눈금(25/50/75/90%): 시안 → 인디고 → 호박 → 주황 → 로즈. 인디고 구간은 그라데이션. */
