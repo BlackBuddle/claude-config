@@ -11,6 +11,7 @@ Claude Code 개인 설정 묶음. 다른 컴퓨터에 같은 환경을 만든다
 | `agents/summarizer.md` | 요약 에이전트 |
 | `skills/stageshow/` | 로컬 스킬 (계정에 올리면 이 사본은 필요 없다) |
 | `skills/decision-rack/` | 결재함 패널 (mod, 판 2). mod가 각 세션의 대화에서 칸(결재·알림·확인)을 뽑아 `~/.claude/decisions/v2/`에 두고 우측 패널에 쌓아 보여준다. 세션의 AI는 결정 파일을 쓰지 않는다. 결정은 그 세션의 대화에서 한다. 칸을 누르면 그 세션으로 간다. 명령: `/decisions`. 규칙: `docs/통합_작업방식.md` 11절 |
+| `mods/my-own-mods/` | 모드·스킬·에이전트 모음 (edit-guard, relay-band, agent-panel, session-board, relay-skills, relay-agents). 자세한 설명은 `mods/my-own-mods/README.md` |
 | `skills/design-clash/` | 로컬 스킬. 디자인 스킬 3개로 시안 3개를 따로 만들고 선택기에서 비교한다. 명령: `/design-clash` |
 | `hooks/reminder.txt` | 알림 훅의 문구. 메시지마다 Claude에게 규칙 4개를 알린다 |
 | `plugins-backup/` | 플러그인 본체의 사본 (`ponytail`, `egm`, `frontend-design`). 백업용이다. 설치는 명령으로 한다 |
