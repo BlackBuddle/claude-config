@@ -642,11 +642,11 @@ test('띠: 데스크톱은 고양이 옆에 개수 단추(점과 숫자)를 두�
   await turnOf($)('끝냈다.') // 띠는 턴 끝(tick)에 개수를 다시 센다
   const ui = await $.ui.mount({ plugin: 'session-board', component: 'AbovePrompt', props: BAND_PROPS, surface: 'desktop' } as any)
   expect(await ui.find({ key: 'catb' })).toBeTruthy()
-  expect(await ui.find({ key: 'open-notice' })).toBeTruthy()
-  expect(await ui.find({ type: 'Button', text: /^1$/ })).toBeTruthy() // 글자 없이 숫자만
+  expect(await ui.find({ key: 'open-asks' })).toBeTruthy() // 알약 옆의 "▸" 여는 단추
+  expect(await ui.find({ type: 'Svg', alt: /알림 1/ } as any)).toBeTruthy() // 띠와 같은 그림 알약(점과 숫자)
   expect((await ui.find({ type: 'Text', text: /ponytail 띠/ }))?.text).toBe('ponytail 띠')
   const opens = seen.opens
-  await ui.press({ key: 'open-notice' })
+  await ui.press({ key: 'open-asks' })
   expect(seen.opens).toBe(opens + 1)
   expect(commands).toEqual([]) // 명령을 거치지 않는다: 대화에 명령 줄이 남지 않는다
   await ui.unmount()

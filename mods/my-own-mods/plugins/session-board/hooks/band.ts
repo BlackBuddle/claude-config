@@ -146,12 +146,22 @@ export const register: Register = on => {
       const d = richData(Date.now(), props.isWorking === true)
       // 고양이는 띠 그림에서 떼어 따로 그리고, 그 바로 옆에 누를 수 있는 개수 단추를 둔다 (2026-11-16 사용자 요청: 고양이 옆에 알림 숫자)
       const kinds = ASK_KINDS.filter(k => asks[k.key] > 0)
-      const band = bandSvg(d, Math.max(200, cols * 8 - 140 - indent * 16 - 40 - kinds.length * 45), true)
+      const band = bandSvg(d, Math.max(200, cols * 8 - 140 - indent * 16 - 40 - kinds.length * 45 - (kinds.length > 0 ? 20 : 0)), true)
       // 앱이 단추 안 글자색을 지운다. 그래서 색 점은 단추 밖의 글자로 둔다
-      const askButtons = kinds.map(k =>
+      const askButtons = kinds.map(k => {
         // 띠가 길어지지 않게 글자(결재·알림·확인) 없이 색 점과 숫자만 쓴다. 뜻은 색이 말한다 (2026-11-16 사용자 요청). 고양이와 붙지 않게 왼쪽을 띄운다
-        Box({ key: `ask-${k.key}`, flexShrink: 0, alignItems: 'center', paddingLeft: 1, children: [Text({ key: 'd', color: k.color, children: '●' }), Button({ key: `open-${k.key}`, label: String(asks[k.key]), plain: true, onPress: () => openBoard($) })] }),
-      )
+        // 알약은 띠와 같은 그림으로 그린다. 단추는 글자만 담고 앱이 그 색을 지워서, 그림 알약 옆에 작은 "▸" 단추를 따로 둔다
+        const pill = askPillSvg(k.level, asks[k.key])
+        return Box({
+          key: `ask-${k.key}`,
+          flexShrink: 0,
+          alignItems: 'center',
+          paddingLeft: 1,
+          children: [Svg({ key: 'p', source: pill.svg, alt: `${k.label} ${asks[k.key]}`, width: pill.w, height: pill.h })],
+        })
+      })
+      // 알약이 여러 개여도 여는 단추는 하나다. 한 글자 plain 단추는 글자 자체가 단추로 그려진다
+      const openButton = kinds.length > 0 ? Box({ key: 'ask-open', flexShrink: 0, alignItems: 'center', children: [Button({ key: 'open-asks', label: '▸', plain: true, dimColor: true, onPress: () => openBoard($) })] }) : null
       const alt = [d.context && `컨텍스트 ${d.context.percent}%`, d.week && `주간 ${Math.round(d.week.percent)}%`, d.turn && `턴 ${d.turn.text}`, `하위 ${d.children}`].filter(Boolean).join(', ')
       const row = Box({
         key: 'rb',
@@ -163,6 +173,7 @@ export const register: Register = on => {
           // 폭 계산이 실제 화면보다 넓게 나와도 "상세" 단추가 밀려나지 않게: 그림 칸만 줄어들고 단추 칸은 줄지 않는다
           Box({ key: 'catb', flexShrink: 0, paddingLeft: 1, children: [Svg({ key: 'cat', source: bandCatSvg(d.mood ?? 'zz'), alt: '고양이', width: 36, height: 36 })] }),
           ...askButtons,
+          openButton,
           Box({ key: 'bandb', flexShrink: 1, minWidth: 0, children: [Svg({ key: 'band', source: band.svg, alt })] }),
           Box({ key: 'fill', flexGrow: 1 }),
           Box({ key: 'detailb', flexShrink: 0, children: [Button({ key: 'detail', label: `상세 ${showDetail ? '▴' : '▾'}`, variant: 'secondary', onPress: () => { showDetail = !showDetail; $.ui.invalidate('ui.render') } })] }),
@@ -478,6 +489,19 @@ const gaugeBar = (x: number, y: number, w: number, h: number, pct: number, fill:
 /** 접힌 밴드: 시안 3번 1절. 폭이 모자라면 하위 → 턴 → 오늘 권장 순으로 숨긴다(컨텍스트·주간 게이지는 끝까지). */
 /** 띠 왼쪽 끝의 고양이 하나(띠와 같은 크기 배율). 띠 그림과 떼어 두어야 그 옆에 단추를 놓을 수 있다. */
 export const bandCatSvg = (mood: 'run' | 'flag' | 'zz') => svgDoc(32, 32, catAvatar(mood, 16, 16), 1.12, CAT[mood])
+
+// 개수 알약의 진한 점 색: 결재 로즈, 알림 호박, 확인 초록 (띠의 경고 알약과 같은 한 벌)
+const ASK_DOT = { err: B.rose, warn: B.amber, ok: B.ok } as const
+/**
+ * 고양이 옆 개수 알약: 띠의 경고 알약과 같은 연한 바탕 + 진한 점 + 굵은 숫자. 띠 그림과 같은 글꼴·배율이다.
+ * 앱 기본 글자로 그리면 점은 탁하고 숫자는 링크색이라 띠와 어울리지 않았다 (2026-11-16 사용자 보고). 단추로 감싸도 그림의 색은 지워지지 않는다.
+ */
+export function askPillSvg(level: 'err' | 'warn' | 'ok', n: number): { svg: string; w: number; h: number } {
+  const num: Run[] = [{ t: String(n), fill: toneOf(level).fg, weight: 700, mono: true }]
+  const w = 9 + 8 + 5 + rsW(num, 12) + 9
+  const body = `<rect x="0" y="5" width="${w}" height="22" rx="11" fill="${toneOf(level).bg}"/><circle cx="13" cy="16" r="4" fill="${ASK_DOT[level]}"/>${rs(num, 22, 20, 12)}`
+  return { svg: svgDoc(w, 32, body, 1.12), w: Math.round(w * 1.12), h: Math.round(32 * 1.12) }
+}
 
 export function bandSvg(d: Rich, maxW: number, noCat = false): { svg: string; w: number; hidden: number } {
   const H = 32 // 얇게 잡고 Z 배로 키워 그린다: 높이는 약 36px, 글씨는 12% 커진다(시안은 52px 에 글씨가 작았다)

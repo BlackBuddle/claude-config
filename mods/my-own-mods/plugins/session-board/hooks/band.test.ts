@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { asksText, bandCatSvg, bandSvg, barsOf, dailyBudget, detailRows, fit, gauge, panelSvg } from './band'
+import { askPillSvg, asksText, bandCatSvg, bandSvg, barsOf, dailyBudget, detailRows, fit, gauge, panelSvg } from './band'
 
 // 시안 3번과 같은 상태: 컨텍스트 31%, 주 15%(오늘 7/19%p), 턴 11초
 const sample: any = {
@@ -163,6 +163,17 @@ test('띠의 글은 0이 아닌 종류만 쓰고, 칸이 없으면 쓰지 않는
 test('터미널 띠 글자 칸에도 개수가 들어가고, 이상 칸이라 좁아도 남는다', () => {
   const segs = [{ prio: 0, value: '✗ 결재 1 · 알림 2', level: 'err' as const }, { prio: 2, label: '하위', value: '0', level: 'mute' as const }, { prio: 9, label: '페이스', value: '+1%p 앞섬', level: 'mute' as const }]
   expect(fit(segs, 24).map(s => s.prio)).toContain(0)
+})
+
+test('개수 알약은 띠의 경고 알약과 같은 연한 바탕·진한 점·굵은 숫자이고, 글자(결재·알림)는 쓰지 않는다', () => {
+  const warn = askPillSvg('warn', 3).svg
+  expect(warn).toContain('fill="#FEF3C7"') // 알림: 연한 호박 바탕
+  expect(warn).toContain('<circle cx="13" cy="16" r="4" fill="#F59E0B"/>') // 진한 호박 점
+  expect(warn).toMatch(/fill="#92400E"[^>]*font-weight="700">3</) // 굵은 숫자
+  expect(warn).not.toContain('알림')
+  expect(askPillSvg('err', 1).svg).toContain('fill="#FFE4E8"') // 결재: 로즈
+  expect(askPillSvg('ok', 1).svg).toContain('fill="#DEF5ED"') // 확인: 초록
+  expect(askPillSvg('warn', 12).w).toBeGreaterThan(askPillSvg('warn', 1).w) // 두 자리면 넓어진다
 })
 
 test('따로 그린 띠 그림에는 고양이가 없다', () => {
