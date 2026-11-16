@@ -1,9 +1,9 @@
 import { expect, test } from 'claude-code/testing'
 
-import { applyPlan, appLink, avatarSvg, badges, barSvg, fmtDur, groupOf, infoSvg, parseRec, progress, type Rec } from './register'
+import { applyPlan, appLink, avatarSvg, badges, barSvg, fmtDur, groupOf, infoSvg, parseRec, nameWidth, progress, projectSlug, titleOf, transcriptTitle, type Rec } from './register'
 
 const NOW = 1_000_000_000_000
-const rec = (p: Partial<Rec> = {}): Rec => ({ id: 's1', name: '프로젝트', state: 'idle', since: NOW, turnStartedAt: null, waitFor: null, done: 0, total: 0, step: '', updatedAt: NOW, appId: null, root: '', ask: null, report: null, askClosedAt: 0, reportClosedAt: 0, ...p })
+const rec = (p: Partial<Rec> = {}): Rec => ({ id: 's1', name: '프로젝트', state: 'idle', since: NOW, turnStartedAt: null, waitFor: null, done: 0, total: 0, step: '', updatedAt: NOW, appId: null, title: '', root: '', ask: null, report: null, askClosedAt: 0, reportClosedAt: 0, ...p })
 
 test('상태바는 상태 글자와 점점 채워지는 막대를 한 덩어리(아바타 높이)로 그리고, 작업 목록이 없으면 막대를 그리지 않는다', () => {
   const run = infoSvg(rec({ state: 'running', turnStartedAt: NOW - 252_000, done: 3, total: 7, step: '시험 작성' }), 'running', NOW)
@@ -305,7 +305,7 @@ function fakeBoard(on: On, files: Record<string, string>, ageMs = 60_000) {
   let clock = 1
   const t0 = Date.now()
   const mtimes: Record<string, number> = Object.fromEntries(Object.keys(files).map(f => [f, t0 - ageMs]))
-  const seen = { ran: [] as string[][], toasts: [] as string[], opens: 0, env: { parent: undefined as string | undefined }, messages: [] as unknown[], during: undefined as any }
+  const seen = { ran: [] as string[][], toasts: [] as string[], opens: 0, env: { parent: undefined as string | undefined }, messages: [] as unknown[], during: undefined as any, tooBig: new Set<string>(), scripts: [] as string[], psOut: '' }
   const base = (p: unknown) => String(p).replaceAll('\\', '/').split('/').pop() ?? ''
   on('env.get', (_, e: any) => ({ value: e.name === 'CLAUDE_CODE_HOST_SESSION_ID' ? 'local_me-1' : e.name === 'CLAUDE_CODE_SESSION_ID' ? seen.env.parent : 'C:/home' }) as any)
   on('session.cwd', () => ({ value: 'C:/work/p' }))
@@ -325,7 +325,10 @@ function fakeBoard(on: On, files: Record<string, string>, ageMs = 60_000) {
     return { value: {} } as any
   })
   on('fs.list', () => ({ value: Object.keys(files).map(f => ({ name: f, kind: 'file', size: 1, mtimeMs: mtimes[f] ?? 0, isLink: false })) }) as any)
-  on('fs.read', (_, e: any) => ({ value: files[base(e.path)] }) as any)
+  on('fs.read', (_, e: any) => {
+    if (seen.tooBig.has(base(e.path))) throw new Error('over 4 MiB') // 엔진은 4 MiB 가 넘는 파일을 거절한다
+    return { value: files[base(e.path)] } as any
+  })
   on('fs.write', (_, e: any) => {
     files[base(e.path)] = e.text
     mtimes[base(e.path)] = t0 + ++clock
@@ -333,7 +336,8 @@ function fakeBoard(on: On, files: Record<string, string>, ageMs = 60_000) {
   })
   on('process.run', (_, e: any) => {
     if (e.argv[0] === 'rundll32' || e.argv[0] === 'cmd') seen.ran.push([...e.argv])
-    return { value: { exitCode: 0, stdout: '', stderr: '' } } as any
+    if (e.argv[0] === 'powershell') seen.scripts.push(e.argv.at(-1))
+    return { value: { exitCode: 0, stdout: e.argv[0] === 'powershell' ? seen.psOut : '', stderr: '' } } as any
   })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('tool.call', () => {
@@ -495,6 +499,77 @@ test('읽지 못한 기록 파일은 오류 줄로 보이고 닫기로 지운다
   await ui.press({ key: 'x:broken.json' })
   expect(seen.ran.at(-1)?.slice(0, 3)).toEqual(['cmd', '/c', 'del'])
   await ui.unmount()
+})
+
+test('줄 이름은 앱 사이드바의 세션 제목이다. 제목을 모르면 첫 요청의 첫 줄, 그것도 없으면 폴더 이름이다', async ($, on) => {
+  expect(titleOf('\n## `인계.md` 를 읽고\n단계 2를 해 줘')).toBe('인계.md 를 읽고')
+  expect(titleOf('가'.repeat(41))).toBe(`${'가'.repeat(40)}…`)
+  expect(titleOf('  \n ')).toBe('')
+  const files: Record<string, string> = {}
+  const seen = fakeBoard(on, files)
+  await $.session.start(START)
+  expect(JSON.parse(files['me.json']!).title).toBe('') // 아직 요청이 없다
+  await $.prompt.submit({ text: '세션 보드 고치기\n자세한 내용', origin: { kind: 'composer' } } as any)
+  await $.prompt.submit({ text: '두 번째 요청', origin: { kind: 'composer' } } as any)
+  expect(JSON.parse(files['me.json']!).title).toBe('세션 보드 고치기')
+  const ui = await mount($, 'terminal')
+  expect(await ui.find({ type: 'Button', text: /세션 보드 고치기/ })).toBeTruthy()
+  await ui.unmount()
+  // 다시 연 세션은 대화의 첫 요청에서 이름을 다시 만든다
+  seen.messages = [{ role: 'user', text: '처음 요청', toolUses: [], toolResults: [] }, { role: 'assistant', text: '네', toolUses: [] }]
+  await $.session.start(START)
+  expect(JSON.parse(files['me.json']!).title).toBe('처음 요청')
+  // 앱이 대화 기록에 제목을 쓰면 턴 끝에 그 이름이 이긴다. 다시 시작해도 첫 요청으로 돌아가지 않는다
+  const line = (t: string) => JSON.stringify({ type: 'custom-title', customTitle: t, sessionId: 'me' })
+  files['me.jsonl'] = [line('Untitled session'), '{"type":"user"}', line('단계 2: 세션 보드'), '{"type":"assistant"}'].join('\n')
+  await turnOf($)('끝냈다.')
+  await new Promise(r => setTimeout(r, 10)) // 턴 끝의 제목 읽기는 기다리지 않고 돈다
+  expect(JSON.parse(files['me.json']!).title).toBe('단계 2: 세션 보드')
+  await $.session.start(START)
+  expect(JSON.parse(files['me.json']!).title).toBe('단계 2: 세션 보드')
+})
+
+test('4MB 가 넘어 읽지 못한 기록은 PowerShell 로 제목 줄만 읽는다',async ($, on) => {
+  const files: Record<string, string> = {}
+  const seen = fakeBoard(on, files)
+  seen.tooBig.add('me.jsonl')
+  seen.psOut = '{"type":"custom-title","customTitle":"큰 세션"}\r\n'
+  await $.session.start(START)
+  expect(JSON.parse(files['me.json']!).title).toBe('큰 세션')
+  expect(seen.scripts[0]).toContain(String.raw`'C:\home\.claude\projects\C--work-p\me.jsonl'`)
+})
+
+test('대화 기록에서 앱의 마지막 세션 제목을 꺼낸다. 제목 전(Untitled session)이나 깨진 줄은 쓰지 않는다', () => {
+  const line = (t: string) => JSON.stringify({ type: 'custom-title', customTitle: t })
+  expect(transcriptTitle([line('옛 제목'), '{"type":"user"}', line('새 제목')].join('\n'))).toBe('새 제목')
+  expect(transcriptTitle(line('끝 줄바꿈 없음'))).toBe('끝 줄바꿈 없음')
+  expect(transcriptTitle(`${line('Untitled session')}\n`)).toBe('')
+  expect(transcriptTitle('{"type":"custom-title","customTitle":')).toBe('')
+  expect(transcriptTitle('')).toBe('')
+  expect(projectSlug(String.raw`C:\Users\PC14\나만의 플러그인 모드 만들기`)).toBe('C--Users-PC14----------------')
+})
+
+test('펼칠 것이 없는 줄(진행 중·쉬는 중)은 이름을 누르면 바로 그 세션으로 간다. 결재가 있는 줄은 펼친다', async ($, on) => {
+  const seen = fakeBoard(on, {
+    'run.json': file('run', { state: 'running' }),
+    'ask.json': file('ask', { ask: OPEN_ASK('request') }),
+  })
+  await $.session.start(START)
+  const ui = await mount($)
+  await ui.press({ key: 'nm:run' })
+  expect(seen.ran).toEqual([['rundll32', 'url.dll,FileProtocolHandler', 'claude://claude.ai/epitaxy/local_ab-12']])
+  await ui.press({ key: 'nm:ask' })
+  expect(seen.ran.length).toBe(1) // 결재 줄은 이동하지 않고 펼친다
+  expect(await ui.find({ key: 'go:ask' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('이름 폭은 패널 폭을 따라 넓어지고, 상태 글자는 오른쪽 끝에 맞춘다', () => {
+  expect(nameWidth(40)).toBe(110) // 기본 폭은 앞 판과 같다
+  expect(nameWidth(60)).toBe(270)
+  expect(nameWidth(10)).toBe(70) // 아주 좁아도 이름 자리는 남긴다
+  expect(nameWidth(undefined)).toBe(110)
+  expect(infoSvg(rec({ state: 'idle', since: NOW - 11_000 }), 'idle', NOW).svg).toContain('text-anchor="end"')
 })
 
 // ---- 검토 고침 -------------------------------------------------------------------------

@@ -24,7 +24,7 @@ test('밴드는 폭이 좁아지면 하위 → 턴 → 오늘 권장 순으로 �
   expect(noChildren.svg).not.toContain('>하위 </tspan>')
   expect(noChildren.svg).toContain('>턴 </tspan>')
   const tiny = bandSvg(sample, 100)
-  expect(tiny.hidden).toBe(3)
+  expect(tiny.hidden).toBe(4) // 마지막 단계는 오류가 아닌 검증 칸(✓ 검증 2)도 숨긴다
   for (const t of ['>하위 </tspan>', '>턴 </tspan>', '>오늘 </tspan>', '>7/19%p</tspan>']) expect(tiny.svg).not.toContain(t)
   expect(tiny.svg).toContain('>컨텍스트</tspan>') // 게이지는 남는다
   expect(tiny.svg).toContain('>주</tspan>')
@@ -237,6 +237,13 @@ test('밴드는 기다리는 세션이 있을 때만 결재·알림·확인 칸�
   for (const word of ['결재', '알림', '확인']) expect(svg).toContain(`>${word} </tspan>`)
   expect(svg).toContain('fill="#FFE4E8"') // 결재는 빨강 알약
   expect(bandSvg({ ...sample, asks: { request: 1, notice: 0, report: 0 } }, 100).svg).toContain('>결재 </tspan>')
+  // 결재·알림 칸이 들어와 넓어지면 마지막 단계에서 오류가 아닌 검증 칸을 숨긴다. 오류 검증 칸은 남긴다
+  const warned = { ...sample, verify: { tone: 'warn', text: '⚠ 검증 못함 (도구 없음)' }, asks: { request: 0, notice: 1, report: 0 } }
+  const tight = bandSvg(warned, 100)
+  expect(tight.svg).not.toContain('검증 못함')
+  expect(tight.svg).toContain('>알림 </tspan>')
+  expect(bandSvg({ ...warned, verify: { tone: 'err', text: '✗ 검증 실패' } }, 100).svg).toContain('검증 실패')
+  expect(bandSvg(warned, 3000).svg).toContain('검증 못함') // 넓으면 그대로 둔다
   expect(bandSvg({ ...sample, asks: { request: 0, notice: 0, report: 0 } }, 2000).svg).not.toContain('결재')
 })
 

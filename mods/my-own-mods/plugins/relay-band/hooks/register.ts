@@ -141,9 +141,10 @@ export const register: Register = on => {
         borderStyle: 'round',
         borderColor: B.line,
         children: [
-          Svg({ key: 'band', source: band.svg, alt }),
+          // 폭 계산이 실제 화면보다 넓게 나와도 "상세" 단추가 밀려나지 않게: 그림 칸만 줄어들고 단추 칸은 줄지 않는다
+          Box({ key: 'bandb', flexShrink: 1, minWidth: 0, children: [Svg({ key: 'band', source: band.svg, alt })] }),
           Box({ key: 'fill', flexGrow: 1 }),
-          Button({ key: 'detail', label: `상세 ${showDetail ? '▴' : '▾'}`, variant: 'secondary', onPress: () => { showDetail = !showDetail; $.ui.invalidate('ui.render') } }),
+          Box({ key: 'detailb', flexShrink: 0, children: [Button({ key: 'detail', label: `상세 ${showDetail ? '▴' : '▾'}`, variant: 'secondary', onPress: () => { showDetail = !showDetail; $.ui.invalidate('ui.render') } })] }),
         ],
       })
       const panel = showDetail ? panelSvg(d) : null
@@ -502,7 +503,8 @@ export function bandSvg(d: Rich, maxW: number): { svg: string; w: number; hidden
   const H = 32 // 얇게 잡고 Z 배로 키워 그린다: 높이는 약 36px, 글씨는 12% 커진다(시안은 52px 에 글씨가 작았다)
   const Z = 1.12
   const cy = 16
-  const build = (show: { children: boolean; turn: boolean; today: boolean }) => {
+  // extra: false 이면 오류가 아닌 검증 칸과 구름 아이콘도 숨긴다 (결재·알림 칸이 들어와 띠가 넓어졌을 때의 마지막 단계)
+  const build = (show: { children: boolean; turn: boolean; today: boolean; extra?: boolean }) => {
     const items: { w: number; draw: (x: number) => string }[] = []
     // 알약은 경고·오류만(눈에 띄어야 하는 것). 나머지는 글자만 둬서 차분하게 보인다.
     const chip = (runs: Run[], tone: Tone) => {
@@ -510,7 +512,7 @@ export function bandSvg(d: Rich, maxW: number): { svg: string; w: number; hidden
       const w = rsW(runs, 12) + (pill ? 18 : 2)
       items.push({ w, draw: x => `${pill ? `<rect x="${x}" y="${cy - 11}" width="${w}" height="22" rx="11" fill="${toneOf(tone).bg}"/>` : ''}${rs(runs, x + (pill ? 9 : 1), cy + 4, 12)}` })
     }
-    if (d.verify) chip([{ t: d.verify.text, fill: toneOf(d.verify.tone).fg, weight: 700 }], d.verify.tone)
+    if (d.verify && (show.extra !== false || d.verify.tone === 'err')) chip([{ t: d.verify.text, fill: toneOf(d.verify.tone).fg, weight: 700 }], d.verify.tone)
     // 사용자를 기다리는 세션: 결재는 빨강, 알림은 호박색 알약, 확인은 초록 글자. 칸이 있을 때만이고 좁아도 숨기지 않는다
     if (d.asks) {
       const one = (label: string, n: number, tone: Tone, fill: string) => n > 0 && chip([{ t: `${label} `, fill, weight: 700 }, { t: String(n), fill, weight: 700, mono: true }], tone)
@@ -552,7 +554,7 @@ export function bandSvg(d: Rich, maxW: number): { svg: string; w: number; hidden
     if (show.turn && d.turn) chip([{ t: '턴 ', fill: B.dim }, { t: d.turn.text, fill: B.ink, weight: 700, mono: true }], 'mute')
     if (show.children) chip([{ t: '하위 ', fill: B.dim }, { t: String(d.children), fill: d.children > 0 ? B.infoText : B.ink, weight: 700, mono: true }], 'mute')
     if (d.cache?.alert) chip([{ t: d.cache.alert, fill: toneOf(d.cache.tone).fg, weight: 700 }], d.cache.tone)
-    if (d.context) items.push({ w: 18, draw: x => `<g transform="translate(${x} ${cy - 9}) scale(0.75)" fill="none" stroke="${levelSolid(d.context!.percent)}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${CLOUD}"/></g>` })
+    if (d.context && show.extra !== false) items.push({ w: 18, draw: x => `<g transform="translate(${x} ${cy - 9}) scale(0.75)" fill="none" stroke="${levelSolid(d.context!.percent)}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${CLOUD}"/></g>` })
     return items
   }
   const shows = [
@@ -560,6 +562,7 @@ export function bandSvg(d: Rich, maxW: number): { svg: string; w: number; hidden
     { children: false, turn: true, today: true },
     { children: false, turn: false, today: true },
     { children: false, turn: false, today: false },
+    { children: false, turn: false, today: false, extra: false },
   ]
   let pick = shows.length - 1
   for (let i = 0; i < shows.length; i += 1) {
@@ -579,7 +582,7 @@ export function bandSvg(d: Rich, maxW: number): { svg: string; w: number; hidden
     body += it.draw(x)
     x += it.w + 18
   })
-  const hidden = (shows[pick].children ? 0 : 1) + (d.turn && !shows[pick].turn ? 1 : 0) + (d.week?.today && !shows[pick].today ? 1 : 0)
+  const hidden = (shows[pick].children ? 0 : 1) + (d.turn && !shows[pick].turn ? 1 : 0) + (d.week?.today && !shows[pick].today ? 1 : 0) + (shows[pick].extra === false && d.verify && d.verify.tone !== 'err' ? 1 : 0)
   return { svg: svgDoc(x - 18 + 16, H, body, Z, CAT[mood]), w: x - 18 + 16, hidden }
 }
 

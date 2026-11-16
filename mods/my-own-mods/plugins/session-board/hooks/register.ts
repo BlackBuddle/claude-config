@@ -7,7 +7,7 @@
 
 import type { Register } from 'claude-code'
 
-import { BW, C, KIND_LABEL, SH, SKIN, SW, avatarSvg, barSvg, clip, fmtDur, hairline, headSvg, infoSvg, mePill, mePlace } from './art'
+import { BW, C, KIND_LABEL, SH, SKIN, SW, avatarSvg, barSvg, clip, fmtDur, hairline, headSvg, infoSvg, mePill } from './art'
 import type { Mood } from './art'
 import { APP_ID_FORMAT, closable, deadLabel, purgeable, groupOf, isDead, isNestedSession, judge, openAsk, openReport, optionsLine, orphanIds, parseAsk, parseReport } from './asks'
 import type { Ask, Group, Report } from './asks'
@@ -41,6 +41,7 @@ export type Rec = {
   step: string // 지금 하는 단계(작업 목록의 진행 중 항목)
   updatedAt: number
   appId: string | null // 앱 세션 번호(CLAUDE_CODE_HOST_SESSION_ID). 앱 링크 claude://claude.ai/epitaxy/<번호> 로 그 세션에 이동한다
+  title: string // 줄에 보이는 이름: 앱 사이드바의 세션 제목. 아직 모르면 첫 요청의 첫 줄, 그것도 없으면 폴더 이름 name
   root: string // 프로젝트 묶음 키(git 공용 폴더). 같은 프로젝트의 새 결재만 알리려고 쓴다
   ask: Ask | null // 사용자를 기다리는 결재·알림
   report: Report | null // 사용자가 읽고 닫을 확인
@@ -71,6 +72,7 @@ export function parseRec(text: unknown): Rec | null {
       step: typeof r.step === 'string' ? r.step : '',
       updatedAt: r.updatedAt,
       appId: typeof r.appId === 'string' && r.appId !== '' ? r.appId : null, // 이전 버전의 기록에는 없다
+      title: typeof r.title === 'string' ? r.title : '',
       root: typeof r.root === 'string' ? r.root : '',
       ask: parseAsk(r.ask),
       report: parseReport(r.report),
@@ -83,7 +85,32 @@ export function parseRec(text: unknown): Rec | null {
 }
 
 
-export type Badge = { text: string; main: boolean }
+/** 요청 글에서 줄 이름을 만든다: 첫 줄에서 마크다운 기호를 떼고 40자에서 자른다. 글이 없으면 ''. */
+export function titleOf(text: string): string {
+  const line = text.split('\n').map(l => l.replace(/[`*#>]/g, '').replace(/\s+/g, ' ').trim()).find(l => l !== '') ?? ''
+  return line.length > 40 ? `${line.slice(0, 40)}…` : line
+}
+
+/** 대화 기록(jsonl) 글에서 앱이 쓴 마지막 세션 제목을 꺼낸다. 아직 제목이 없으면(Untitled session) ''. */
+export function transcriptTitle(text: string): string {
+  const at = text.lastIndexOf('"type":"custom-title"')
+  if (at < 0) return ''
+  const line = text.slice(text.lastIndexOf('\n', at) + 1, (text.indexOf('\n', at) + 1 || text.length + 1) - 1)
+  try {
+    const title = JSON.parse(line).customTitle
+    return typeof title === 'string' && title.trim() !== '' && title !== 'Untitled session' ? title.trim() : ''
+  } catch {
+    return ''
+  }
+}
+
+/** 대화 기록 폴더의 이름: 세션 폴더 경로에서 영문·숫자가 아닌 글자를 모두 '-' 로 바꾼다 (Claude Code 의 규칙). */
+export const projectSlug = (cwd: string): string => cwd.replace(/[^A-Za-z0-9]/g, '-')
+
+/** 줄에 쓸 이름. 첫 요청이 아직 없으면 폴더 이름이다. */
+export const shownName = (r: Rec): string => r.title || r.name
+
+export type Badge ={ text: string; main: boolean }
 /** 카드에 달 뱃지. 첫 번째가 알약(주), 나머지는 흐린 글자(보조). */
 export function badges(r: Rec, now: number): Badge[] {
   const progress = r.total > 0 ? `${r.done}/${r.total} 단계` : ''
@@ -139,6 +166,8 @@ let broken: { name: string; why: string }[] = [] // 읽지 못한 기록 파일.
 let isTerminal = false // 터미널 세션의 앱 번호(환경 변수)는 앱이 연 세션의 것이라 쓰면 엉뚱한 세션으로 간다
 // 지금 턴에 사용자가 입력했는가. 신호 없이 끝난 사용자 턴만 결재·알림을 닫는다. 턴 끝에서만 false 로 되돌린다
 let isUserTurn = false
+let cwdPath = '' // 세션 폴더. 대화 기록 파일의 폴더 이름을 만든다
+let hasAppTitle = false // 대화 기록에서 앱 제목을 찾았는가. 찾은 뒤에는 턴마다 큰 파일을 다시 읽지 않는다
 let turnStartCount: number | undefined // 턴이 시작할 때의 메시지 수. 턴 끝에 이 뒤의 메시지만 판정한다
 const announced = new Set<string>() // 이미 알린 결재 (세션:시각). 같은 결재로 패널을 두 번 열지 않는다
 const parsedFiles = new Map<string, { mtimeMs: number; size: number; rec: Rec | null }>() // 수정 시각과 크기가 같으면 다시 읽지 않는다
@@ -274,6 +303,46 @@ async function closeIn($: any, id: string, patch: { askClosedAt?: number; report
   $.ui.invalidate('ui.render')
 }
 
+/**
+ * 앱 사이드바의 세션 제목을 내 대화 기록 파일에서 읽어 이름으로 쓴다. 제목이 없거나 같으면 아무것도 하지 않는다.
+ * 모드 API 와 classic 훅의 session_title 은 앱 제목을 주지 않는다(2026-11-16 앱에서 확인). 앱은 제목을 기록 파일에 custom-title 줄로 쓴다.
+ * 기록 파일은 수십 MB 까지 커지고 $.fs 는 끝부분만 읽지 못한다. 그래서 세션 시작 때 1번, 그 뒤에는 제목을 찾을 때까지만 턴 끝마다 읽는다.
+ * shortcut: 사이드바에서 이름을 바꾸면 그 세션을 다시 열 때 반영된다. 바로 반영이 필요하면 끝부분만 읽는 방법을 찾는다.
+ */
+async function readAppTitle($: any, isForced = false) {
+  if (!me || cwdPath === '' || dir === '' || (hasAppTitle && !isForced)) return
+  const path = `${dir.replace(/session-board$/, 'projects')}/${projectSlug(cwdPath)}/${me.id}.jsonl`
+  // $.fs.read 는 4 MiB 가 넘는 파일을 거절한다. 그때는 PowerShell 로 제목 줄만 골라 읽는다
+  const text: unknown = await $.fs.read(path).catch(() => bigTitleLine($, path))
+  const title = transcriptTitle(typeof text === 'string' ? text : '')
+  if (title === '') return
+  hasAppTitle = true
+  if (me.title !== title) await save($, { title })
+}
+
+/**
+ * 큰 기록 파일에서 마지막 제목 줄만 읽는다. 경로를 명령 글에 넣으므로 안전한 글자로만 된 경로일 때만 실행한다.
+ * 무늬 'type.:.custom-title' 은 큰따옴표 없이 실제 제목 줄만 찾는다(대화 속 글은 \" 로 바뀌어 있어 맞지 않는다).
+ * shortcut: Windows 전용이다. 다른 OS 를 쓰게 되면 tail/grep 을 더한다.
+ */
+async function bigTitleLine($: any, path: string): Promise<string> {
+  const win = path.replace(/\//g, '\\')
+  if (!/^[A-Za-z]:\\[\w .\-\\]+\.jsonl$/.test(win)) return ''
+  const script = `[Console]::OutputEncoding=[Text.Encoding]::UTF8; Select-String -LiteralPath '${win}' -Encoding UTF8 -Pattern 'type.:.custom-title' | Select-Object -Last 1 | ForEach-Object { $_.Line }`
+  const run = await $.process.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', script]).catch(() => undefined)
+  return run?.exitCode === 0 ? run.stdout : ''
+}
+
+/** 이름을 눌렀다: 결재·알림·확인이 있으면 펴서 내용을 보이고, 펼칠 것이 없는 줄(진행 중·쉬는 중)은 그 세션으로 바로 간다. */
+function pressName($: any, r: Rec, isMe: boolean) {
+  const hasContent = openAsk(r) !== null || openReport(r) !== null
+  if (!hasContent && !isMe && appLink(r) !== null) void goTo($, r)
+  else toggle($, r.id)
+}
+
+/** 이름에 쓸 수 있는 폭(px). 패널 폭(글자 칸 수)에서 고양이·알약·상태바·여백 몫을 뺀다. 넓히면 제목이 더 보인다. */
+export const nameWidth = (cols: unknown): number => Math.max(70, (typeof cols === 'number' && cols > 0 ? cols : 40) * 8 - 210)
+
 /** 칸을 연 상태를 바꾼다. 같은 줄을 다시 누르면 접는다. */
 function toggle($: any, id: string) {
   openId = openId === id ? '' : id
@@ -325,14 +394,20 @@ export const register: Register = on => {
     const now = await $.clock.now()
     isTerminal = e.surface === 'terminal'
     const id = await $.session.id()
-    me = { id, name: cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd, state: 'idle', since: now, turnStartedAt: null, waitFor: null, done: 0, total: 0, step: '', updatedAt: now, appId: await ownerAppId($, id), root: await projectRoot($), ask: null, report: null, askClosedAt: 0, reportClosedAt: 0 }
+    me = { id, name: cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd, state: 'idle', since: now, turnStartedAt: null, waitFor: null, done: 0, total: 0, step: '', updatedAt: now, appId: await ownerAppId($, id), title: '', root: await projectRoot($), ask: null, report: null, askClosedAt: 0, reportClosedAt: 0 }
     await $.command.register({ name: 'session_board', description: '세션 상태판(결재·알림·확인 / 진행 중 / 완료)을 열거나 닫습니다' })
     await purge($, now)
     // 다시 연 세션이나 다시 읽은 모드: 지난 기록의 칸을 이어받고 마지막 답으로 다시 판정한다. 신호가 없어도 닫지 않는다
     const before = await $.fs.read(`${dir}/${id}.json`).then(parseRec, () => null)
     if (before) me = { ...me, ask: before.ask, report: before.report, askClosedAt: before.askClosedAt, reportClosedAt: before.reportClosedAt }
-    await save($)
     const messages = await $.session.messages().catch(() => [])
+    // 다시 연 세션은 대화의 첫 요청에서 이름을 다시 만든다
+    const first = messages.find(m => m.role === 'user' && (m.toolResults ?? []).length === 0 && (m.text ?? '').trim() !== '')
+    me.title = titleOf(first?.text ?? '')
+    cwdPath = cwd
+    hasAppTitle = false
+    await readAppTitle($, true) // 앱 제목이 있으면 첫 요청 대신 그것을 쓴다
+    await save($)
     turnStartCount = messages.length // 다음 턴은 이 뒤의 메시지만 판정한다
     const last = lastTurn(messages)
     // 확인 줄은 다시 더하지 않는다: 사용자가 이미 확인(닫음)한 줄이 되살아난다. 결재·알림은 아직 기다리면 다시 생겨야 한다
@@ -361,6 +436,8 @@ export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
     const origin = (e.origin as { kind?: string } | undefined)?.kind
     if (origin === undefined || USER_ORIGINS.has(origin)) isUserTurn = true
+    // 새 세션의 첫 요청이 이름이 된다. 다른 세션이 보낸 지시도 첫 요청이면 이름이다(하위 세션은 그것이 할 일이다)
+    if (me && me.title === '' && titleOf(e.text) !== '') await save($, { title: titleOf(e.text) })
     return next(e)
   })
 
@@ -401,6 +478,7 @@ export const register: Register = on => {
         await go($, 'idle')
       }
     } else await go($, 'idle')
+    void readAppTitle($) // 앱은 첫 요청 뒤에 제목을 정한다. 찾을 때까지만 읽는다. 큰 파일은 PowerShell 이 느려 턴 끝을 기다리게 하지 않는다
     return next(e)
   })
 
@@ -469,7 +547,7 @@ export const register: Register = on => {
       return Box({
         flexDirection: 'column',
         gap: 1,
-        children: [fold, desktopBoard($, $.ui.resolve(e), sections, now), ...brokenRows($, Box, Text, Button), Text({ key: 'total', dimColor: true, children: `세션 ${shown.length}개 · 이름을 누르면 내용이 펴집니다` })],
+        children: [fold, desktopBoard($, $.ui.resolve(e), sections, now, nameWidth((e as any).props?.bodyColumns)), ...brokenRows($, Box, Text, Button), Text({ key: 'total', dimColor: true, children: `세션 ${shown.length}개 · 이름을 누르면 내용이 펴집니다` })],
       })
     }
     const body: any[] = [fold]
@@ -496,11 +574,12 @@ export const register: Register = on => {
 // 이 값을 OS 에 넘기므로 번호가 정확한 모양일 때만 쓴다
 export const appLink = (r: Rec): string | null => (r.appId !== null && APP_ID_FORMAT.test(r.appId) ? `claude://claude.ai/epitaxy/${r.appId}` : null)
 
-/** 세션 하나의 줄: 고양이 · 이름(누르면 펴짐) | 상태바 | 이 세션. 한 줄에 놓아 세션 하나가 한 줄만 차지한다. 펴지면 그 아래에 내용이 붙는다. */
-function sessionCard($: any, t: any, r: Rec, g: Mood, now: number, isMe: boolean) {
+/** 세션 하나의 줄: 고양이 · 이름(누르면 펴짐) | 이 세션 · 상태바. 한 줄에 놓아 세션 하나가 한 줄만 차지한다. 펴지면 그 아래에 내용이 붙는다. */
+function sessionCard($: any, t: any, r: Rec, g: Mood, now: number, isMe: boolean, nameMax: number) {
   const { Box, Svg, Button } = t
   const s = SKIN[g]
-  const name = clip(r.name, 150, 14)
+  // 단추 글자는 줄어들지 않아 패널 폭에 맞춰 미리 자른다. 패널을 넓히면 제목이 더 보인다. 계산이 빗나가도 이름 칸만 줄어든다
+  const name = clip(shownName(r), nameMax, 14)
   const info = infoSvg(r, g, now)
   // 이미지 크기를 고정한다: 크기를 안 주면 패널을 넓힐 때 이미지가 폭에 맞춰 끝없이 커진다.
   const row = Box({
@@ -510,13 +589,13 @@ function sessionCard($: any, t: any, r: Rec, g: Mood, now: number, isMe: boolean
     backgroundColor: g === 'request' || g === 'notice' || g === 'report' ? s.tint : undefined, // 줄은 가볍게 두고, 사용자를 기다리는 줄만 연한 바탕으로 눈에 띄게 한다
     paddingX: 1,
     children: [
-      Svg({ key: 'av', source: avatarSvg(g), alt: `${s.alt} 고양이`, width: 32, height: 32 }),
+      Box({ key: 'avb', flexShrink: 0, children: [Svg({ key: 'av', source: avatarSvg(g), alt: `${s.alt} 고양이`, width: 32, height: 32 })] }),
       // 패널의 Link 는 claude:// 주소를 열지 않는다. 이름은 펴는 단추이고 이동은 펴진 곳의 "이동" 단추가 한다
-      Button({ key: `nm:${r.id}`, plain: true, label: name, onPress: () => toggle($, r.id) }),
+      Box({ key: 'nmb', flexShrink: 1, minWidth: 0, children: [Button({ key: `nm:${r.id}`, plain: true, label: name, onPress: () => pressName($, r, isMe) })] }),
       Box({ key: 'fl', flexGrow: 1 }),
-      Svg({ key: 'info', source: info.svg, alt: `${s.alt} 상태: ${r.state}${r.total > 0 ? `, 진척 ${r.done}/${r.total}` : ''}${r.step !== '' ? `, ${r.step}` : ''}`, width: SW, height: SH }),
-      // 이 세션 알약 자리는 모든 줄이 같은 크기로 잡아(빈 줄은 빈 이미지) 상태바가 줄마다 같은 곳에 서게 한다.
-      Svg({ key: 'me', source: isMe ? mePill : mePlace, alt: isMe ? '이 세션' : '', width: 44, height: 15 }),
+      // 이 세션 알약은 상태바 앞에 둔다. 상태바가 늘 줄의 오른쪽 끝에 서서 상태·시간이 줄마다 같은 자리에 온다
+      isMe ? Box({ key: 'meb', flexShrink: 0, children: [Svg({ key: 'me', source: mePill, alt: '이 세션', width: 44, height: 15 })] }) : null,
+      Box({ key: 'infob', flexShrink: 0, children: [Svg({ key: 'info', source: info.svg, alt: `${s.alt} 상태: ${r.state}${r.total > 0 ? `, 진척 ${r.done}/${r.total}` : ''}${r.step !== '' ? `, ${r.step}` : ''}`, width: SW, height: SH })] }),
     ],
   })
   return Box({ key: r.id, flexDirection: 'column', children: [row, openId === r.id ? detailBox($, t, r, now, isMe) : null] })
@@ -568,7 +647,7 @@ function sortRows(rows: Rec[], g: Group): Rec[] {
 
 
 /** 흰 상자 하나에 묶음 머리글과 세션 줄을 쌓는다(앱 테마와 관계없이 읽히도록 흰 바탕). 줄 사이는 얇은 구분선. */
-function desktopBoard($: any, t: any, sections: { g: (typeof GROUPS)[number]; rows: Rec[] }[], now: number) {
+function desktopBoard($: any, t: any, sections: { g: (typeof GROUPS)[number]; rows: Rec[] }[], now: number, nameMax: number) {
   const { Box, Svg, Button } = t
   return Box({
     key: 'board',
@@ -581,7 +660,7 @@ function desktopBoard($: any, t: any, sections: { g: (typeof GROUPS)[number]; ro
     children: sections.flatMap(sec => [
       Svg({ key: `h-${sec.g.key}`, source: headSvg(sec.g.title, sec.rows.length, sec.g.key), alt: `${sec.g.title} ${sec.rows.length}`, width: BW + 16, height: 26 }),
       ...ackAll($, Box, Button, sec.g.key, sec.rows),
-      ...sec.rows.flatMap((r, i) => [i > 0 ? Svg({ key: `d-${r.id}`, source: hairline, alt: '구분선' }) : null, sessionCard($, t, r, sec.g.key, now, me?.id === r.id)]),
+      ...sec.rows.flatMap((r, i) => [i > 0 ? Svg({ key: `d-${r.id}`, source: hairline, alt: '구분선' }) : null, sessionCard($, t, r, sec.g.key, now, me?.id === r.id, nameMax)]),
     ]),
   })
 }
@@ -606,7 +685,7 @@ function card($: any, Box: any, Text: any, Svg: any, Button: any, r: Rec, g: Moo
     b.main ? Text({ key: `b${i}`, bold: true, color: pillText, backgroundColor: pillBg, children: ` ${b.text} ` }) : Text({ key: `b${i}`, color: C.dim, children: b.text }),
   )
   const children: any[] = [
-    Box({ key: 'top', gap: 1, children: [Button({ key: `nm:${r.id}`, plain: true, label: r.name, onPress: () => toggle($, r.id) }), isMe ? Text({ key: 'me', color: C.dim, children: '이 세션' }) : null] }),
+    Box({ key: 'top', gap: 1, children: [Button({ key: `nm:${r.id}`, plain: true, label: shownName(r), onPress: () => pressName($, r, isMe) }), isMe ? Text({ key: 'me', color: C.dim, children: '이 세션' }) : null] }),
     Box({ key: 'badges', gap: 1, children: pills }),
   ]
   if (r.total > 0) {

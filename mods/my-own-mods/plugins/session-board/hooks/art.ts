@@ -99,7 +99,8 @@ export function infoSvg(r: Rec, g: Mood, now: number): { svg: string; h: number 
           : [{ t: '쉬는 중', fill: C.dim, weight: 700 }, since(r.since)]
   // 폭을 넘으면 시간(뒤 조각)부터 뺀다.
   const fitted = label.length > 1 && label.reduce((n, x) => n + tw(x.t, 11), 0) > SW ? label.slice(0, 1) : label
-  const parts: string[] = [rs(fitted.length === 1 ? [{ ...fitted[0], t: clip(fitted[0].t, SW, 11) }] : fitted, 0, r.total > 0 ? 12 : 20, 11)]
+  // 오른쪽 끝에 맞춘다: 상태 글자 길이가 달라도 시간이 줄마다 같은 자리에서 끝난다
+  const parts: string[] = [rs(fitted.length === 1 ? [{ ...fitted[0], t: clip(fitted[0].t, SW, 11) }] : fitted, SW, r.total > 0 ? 12 : 20, 11, 'end')]
   if (r.total > 0) {
     const room = 52
     const y = 19
@@ -114,9 +115,8 @@ export function infoSvg(r: Rec, g: Mood, now: number): { svg: string; h: number 
   return { svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${SW}" height="${SH}" viewBox="0 0 ${SW} ${SH}">${parts.join('')}</svg>`, h: SH }
 }
 
-const mePlace = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 15"></svg>'
 /** 줄 사이 구분선. 폭을 안 주면 이미지가 패널 폭에 맞춰져 상자 끝까지 닿는다(높이는 비율대로 약 6px 이하라 선은 가늘다). */
 const hairline = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 8"><rect y="3.5" width="600" height="1" fill="${C.line}"/></svg>`
 
-export { BW, C, SH, SKIN, SW, clip, hairline, headSvg, mePill, mePlace }
+export { BW, C, SH, SKIN, SW, clip, hairline, headSvg, mePill }
 export type { Mood }
