@@ -24,6 +24,9 @@ if (-not (Test-Path $main) -or -not (Select-String -Path $main -SimpleMatch $imp
 foreach ($d in 'docs', 'agents', 'skills', 'hooks') {
     Copy-Item (Join-Path $src $d) $Target -Recurse -Force
 }
+# decision-rack moved into the session-board plugin (mods/). Copy does not delete, so remove the old copy.
+$old = Join-Path $Target 'skills\decision-rack'
+if (Test-Path $old) { Remove-Item $old -Recurse -Force; Write-Host "Removed old $old" }
 
 # Register the reminder hook in settings.json. Other hooks and settings stay.
 $sp = Join-Path $Target 'settings.json'

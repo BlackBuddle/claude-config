@@ -44,7 +44,9 @@ gh repo clone Dawnilove/claude-config "$env:USERPROFILE\claude-config"; powershe
 | 2 | 그 컴퓨터의 `CLAUDE.md` 끝에 `@CLAUDE.shared.md` 1줄을 추가한다 | 이미 있으면 추가하지 않는다 |
 | 3 | `docs`, `agents`, `skills`, `hooks`를 `~/.claude`에 복사한다 | 같은 이름의 파일은 덮어쓴다 |
 | 4 | `settings.json`에 알림 훅 1개와 `"language": "korean"`을 추가한다 | 다른 설정과 훅은 그대로 둔다. 언어 설정이 이미 있으면 그 값을 둔다. 고치기 전의 파일은 `settings.json.bak-setup`으로 남긴다 |
+| 3-1 | 구 `skills/decision-rack`이 있으면 지운다 | 결재함이 `session-board`로 옮겨졌다 |
 | 5 | 플러그인 3개를 설치한다: `ponytail`, `frontend-design`, `egm` | 이미 있으면 건너뛴다 |
+| 6 | 사용자 환경 변수 `CLAUDE_CODE_PLUGIN_DIRS`를 저장소의 `mods\my-own-mods\plugins`로 정한다. 내 모드 3개(`session-board`, `relay-skills`, `relay-agents`)가 켜진다 | 다른 값이 이미 있으면 경고만 하고 그대로 둔다 |
 
 ### 2-4. 설치를 확인한다
 
@@ -64,6 +66,8 @@ git -C "$env:USERPROFILE\claude-config" pull; powershell -ExecutionPolicy Bypass
 ```
 
 끝난 뒤 Claude Code를 다시 시작한다. 자동으로 적용되지 않는다. 변경이 있을 때마다 이 명령을 실행한다.
+
+주의: `-SkipPlugins`는 환경 변수(6단계)도 건너뛴다. 모드를 처음 켜는 컴퓨터는 `-SkipPlugins` 없이 `setup.ps1`을 한 번 실행한다. 모드 코드는 저장소 폴더를 직접 읽으므로 `git pull`만으로 갱신된다.
 
 ## 4. 고친 설정을 저장소에 올린다
 
