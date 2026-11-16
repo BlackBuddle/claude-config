@@ -49,6 +49,9 @@ export const openReport = (r: Marks): Report | null => (r.report !== null && r.r
 /** 끝난 세션이거나 기록이 끊긴 세션. 칸은 남지만 그 세션은 더 답하지 못할 수 있다. */
 export const isDead = (r: Watch, now: number): boolean => r.state === 'ended' || now - r.updatedAt > STALE_MS
 
+/** 죽은 세션의 표시. 끝낸 세션과 기록만 끊긴 세션(절전, 앱 멈춤)을 나눈다: 끊긴 세션은 아직 살아 있을 수 있다. */
+export const deadLabel = (r: Watch): string => (r.state === 'ended' ? '세션 끝남' : '응답 없음')
+
 export function groupOf(r: Watch, now: number): Group {
   const ask = openAsk(r)
   const report = openReport(r)
@@ -61,12 +64,21 @@ export function groupOf(r: Watch, now: number): Group {
   return r.state
 }
 
-/** 닫기 단추를 둘 칸인가. 살아 있는 새 결재에는 두지 않는다: 그 세션에서 답해야 사라진다. */
+/**
+ * 닫기 단추를 둘 칸인가. 살아 있는 새 결재에는 두지 않는다: 그 세션에서 답해야 사라진다.
+ * 결재는 세션이 실제로 끝났거나(ended) 24시간이 지났을 때만 닫는다. 기록만 끊긴 세션은 절전에서 깨어난 직후일 수 있어 닫지 않는다.
+ */
 export function closable(r: Watch, now: number): boolean {
   const ask = openAsk(r)
   if (!ask) return false
   if (ask.kind === 'notice') return true
-  return isDead(r, now) || now - ask.at > OLD_ASK_MS
+  return r.state === 'ended' || now - ask.at > OLD_ASK_MS
+}
+
+/** 정리 때 지워도 되는 기록인가. 열린 칸이 있으면 keepOpenMs 까지 남긴다: 사용자가 아직 보지 않았다. */
+export function purgeable(r: Marks | null, ageMs: number, keepMs: number, keepOpenMs: number): boolean {
+  if (ageMs <= keepMs) return false
+  return r === null || (openAsk(r) === null && openReport(r) === null) || ageMs > keepOpenMs
 }
 
 /** 상태 띠의 개수: 사용자를 기다리는 칸만 센다. 진행 중인 칸과 끝난 세션은 세지 않는다. */

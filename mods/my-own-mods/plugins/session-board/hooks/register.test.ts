@@ -300,17 +300,18 @@ const LIVE = () => Date.now()
 const file = (id: string, p: Partial<Rec> = {}) => JSON.stringify(rec({ id, name: `세션-${id}`, updatedAt: LIVE(), since: LIVE(), appId: 'local_ab-12', ...p }))
 
 // 가짜 기록 폴더: 파일 내용과 수정 시각을 바꾸는 쓰기, 실행한 명령과 알림을 모은다
-function fakeBoard(on: On, files: Record<string, string>) {
+// ageMs: 처음 파일들의 나이. 10초보다 어리면 "쓰는 중"으로 보고, 하루보다 늙으면 정리 대상이 된다
+function fakeBoard(on: On, files: Record<string, string>, ageMs = 60_000) {
   let clock = 1
-  const t0 = Date.now() // 수정 시각이 너무 옛날이면 세션 시작 때의 정리가 파일을 지운다
-  const mtimes: Record<string, number> = Object.fromEntries(Object.keys(files).map(f => [f, t0]))
-  const seen = { ran: [] as string[][], toasts: [] as string[], opens: 0 }
+  const t0 = Date.now()
+  const mtimes: Record<string, number> = Object.fromEntries(Object.keys(files).map(f => [f, t0 - ageMs]))
+  const seen = { ran: [] as string[][], toasts: [] as string[], opens: 0, env: { parent: undefined as string | undefined }, messages: [] as unknown[], during: undefined as any }
   const base = (p: unknown) => String(p).replaceAll('\\', '/').split('/').pop() ?? ''
-  on('env.get', (_, e: any) => ({ value: e.name === 'CLAUDE_CODE_HOST_SESSION_ID' ? 'local_me-1' : e.name === 'CLAUDE_CODE_SESSION_ID' ? undefined : 'C:/home' }) as any)
+  on('env.get', (_, e: any) => ({ value: e.name === 'CLAUDE_CODE_HOST_SESSION_ID' ? 'local_me-1' : e.name === 'CLAUDE_CODE_SESSION_ID' ? seen.env.parent : 'C:/home' }) as any)
   on('session.cwd', () => ({ value: 'C:/work/p' }))
   on('session.id', () => ({ value: 'me' }))
   on('session.root', () => ({ value: 'C:/work/p' }))
-  on('session.messages', () => ({ value: [] }) as any)
+  on('session.messages', () => ({ value: seen.messages }) as any)
   on('clock.now', () => ({ value: Date.now() }))
   on('clock.every', () => ({ value: {} }) as any)
   on('command.register', () => ({ value: { command: 'session_board' } }))
@@ -335,7 +336,10 @@ function fakeBoard(on: On, files: Record<string, string>) {
     return { value: { exitCode: 0, stdout: '', stderr: '' } } as any
   })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('tool.call', () => ({ result: {} }))
+  on('tool.call', () => {
+    seen.during = files['me.json'] === undefined ? undefined : JSON.parse(files['me.json']) // 도구가 도는 동안의 내 기록
+    return { result: {} }
+  })
   on('prompt.submit', (_, e: any) => ({ text: e.text }))
   on('turn.complete', (_, e: any) => ({ text: e.answer }))
   return seen
@@ -491,4 +495,100 @@ test('읽지 못한 기록 파일은 오류 줄로 보이고 닫기로 지운다
   await ui.press({ key: 'x:broken.json' })
   expect(seen.ran.at(-1)?.slice(0, 3)).toEqual(['cmd', '/c', 'del'])
   await ui.unmount()
+})
+
+// ---- 검토 고침 -------------------------------------------------------------------------
+const OPEN_ASK = (kind: 'request' | 'notice', at = LIVE()) => ({ kind, question: `${kind} 질문`, background: [], options: [], at })
+
+test('검토 고침: 방금 바뀐 파일은 읽기에 실패해도 오류 줄로 보이지 않는다 (쓰는 중일 수 있다)', async ($, on) => {
+  fakeBoard(on, { 'half.json': '{"id":"half","na' }, 1_000)
+  await $.session.start(START)
+  const ui = await mount($)
+  expect(await ui.find({ type: 'Text', text: /읽지 못했다/ })).toBeFalsy()
+  await ui.unmount()
+})
+
+test('검토 고침: 파일 이름과 id 가 다른 기록은 오류 줄이다. 닫기가 엉뚱한 파일을 고치지 않는다', async ($, on) => {
+  const files: Record<string, string> = { 'a.json': file('../../x', { ask: OPEN_ASK('notice') }) }
+  fakeBoard(on, files)
+  await $.session.start(START)
+  const ui = await mount($)
+  expect((await ui.find({ type: 'Text', text: /읽지 못했다: a\.json/ }))?.text).toBeDefined()
+  expect(await ui.find({ key: 'nm:../../x' })).toBeFalsy()
+  expect(Object.keys(files).sort()).toEqual(['a.json', 'me.json'])
+  await ui.unmount()
+})
+
+test('검토 고침: 기록만 끊긴 세션의 새 결재는 "응답 없음"이고 닫기가 없다. 끝낸 세션은 "세션 끝남"이고 닫기가 있다', async ($, on) => {
+  const old = LIVE() - 10 * 60_000 // 절전에서 깨어난 직후처럼 10분 동안 박동이 없었다
+  fakeBoard(on, {
+    'sleep.json': file('sleep', { updatedAt: old, ask: OPEN_ASK('request') }),
+    'gone.json': file('gone', { updatedAt: old, state: 'ended', ask: OPEN_ASK('request') }),
+  })
+  await $.session.start(START)
+  const ui = await mount($, 'terminal')
+  await ui.press({ key: 'nm:sleep' })
+  expect(await ui.find({ key: 'close:sleep' })).toBeFalsy()
+  expect(await ui.find({ type: 'Text', text: /응답 없음/ })).toBeTruthy()
+  await ui.press({ key: 'nm:gone' })
+  expect(await ui.find({ key: 'close:gone' })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /세션 끝남/ })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('검토 고침: 세션을 다시 열어도 이미 확인한 확인 줄은 되살아나지 않는다. 기다리는 결재는 다시 생긴다', async ($, on) => {
+  const files: Record<string, string> = { 'me.json': file('me', { report: { lines: ['시험 통과'], at: 10 }, reportClosedAt: 20 }) }
+  const seen = fakeBoard(on, files)
+  seen.messages = [
+    { role: 'user', text: '해', toolUses: [], toolResults: [] },
+    { role: 'assistant', text: '확인: 시험 통과\n결재: 푸시하는가?', toolUses: [] },
+  ]
+  await $.session.start(START)
+  const mine = JSON.parse(files['me.json']!)
+  expect(mine.ask).toMatchObject({ kind: 'request', question: '푸시하는가?' })
+  expect(mine.report).toEqual({ lines: ['시험 통과'], at: 10 }) // 닫힌 그대로다
+})
+
+test('검토 고침: 하루 넘은 파일 정리는 열린 결재·확인이 있는 파일을 7일까지 남긴다', async ($, on) => {
+  const day = 24 * 60 * 60 * 1000
+  const seen = fakeBoard(on, {
+    'plain.json': file('plain', { updatedAt: LIVE() - 2 * day }),
+    'open.json': file('open', { updatedAt: LIVE() - 2 * day, report: { lines: ['아직 안 봄'], at: 1 } }),
+  }, 2 * day)
+  await $.session.start(START)
+  const deleted = seen.ran.filter(a => a[2] === 'del').map(a => a.at(-1)!.split('\\').pop())
+  expect(deleted).toEqual(['plain.json'])
+})
+
+test('검토 고침: 터미널 세션과 다른 세션 안에서 띄운 세션은 물려받은 앱 번호를 쓰지 않는다', async ($, on) => {
+  const files: Record<string, string> = {}
+  const seen = fakeBoard(on, files)
+  await $.session.start({ ...START, surface: 'terminal' } as any)
+  expect(JSON.parse(files['me.json']!).appId).toBeNull()
+  seen.env.parent = 'parent-session' // 부모가 물려준 자기 번호. 이 세션의 번호(me)와 다르다
+  await $.session.start(START)
+  expect(JSON.parse(files['me.json']!).appId).toBeNull()
+  seen.env.parent = undefined // 앱이 연 세션에는 이 값이 없다
+  await $.session.start(START)
+  expect(JSON.parse(files['me.json']!).appId).toBe('local_me-1')
+})
+
+test('검토 고침: 선택 카드가 뜨면 알림 칸이 생기고, 답한 뒤 신호 없이 끝난 턴은 칸을 닫는다', async ($, on) => {
+  const files: Record<string, string> = {}
+  const seen = fakeBoard(on, files)
+  await $.session.start(START)
+  await $.tool.call({ tool: 'AskUserQuestion', questions: [{ question: '어느 쪽인가?', options: [{ label: 'A' }, { label: 'B' }] }] } as any)
+  expect(seen.during).toMatchObject({ state: 'waiting', ask: { kind: 'notice', question: '어느 쪽인가?', options: ['A', 'B'] } })
+  seen.messages = [{ role: 'assistant', text: 'A로 했다.', toolUses: [] }]
+  await turnOf($)('A로 했다.')
+  expect(JSON.parse(files['me.json']!).ask).toBeNull()
+})
+
+test('검토 고침: 같은 앱 세션의 옛 번호에 남은 결재는 이 세션의 판정 때 닫는다', async ($, on) => {
+  const files: Record<string, string> = { 'old1.json': file('old1', { appId: 'local_me-1', ask: OPEN_ASK('request') }), 'else.json': file('else', { appId: 'local_zz', ask: OPEN_ASK('request') }) }
+  fakeBoard(on, files)
+  await $.session.start(START) // 시작 때는 아직 폴더를 읽기 전이라 다음 판정에서 닫는다
+  await turnOf($)('끝냈다.')
+  expect(JSON.parse(files['old1.json']!).askClosedAt).toBeGreaterThan(0)
+  expect(JSON.parse(files['else.json']!).askClosedAt).toBe(0)
 })

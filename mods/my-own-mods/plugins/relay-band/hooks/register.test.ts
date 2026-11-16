@@ -201,6 +201,30 @@ test('기다리는 세션을 센다: 결재·알림·권한 승인 대기·확�
   expect(countBoard([], NOW)).toEqual({ request: 0, notice: 0, report: 0 })
 })
 
+// 판정 기대값 표. session-board 의 asks.test.ts 에 같은 표가 있다. 모드끼리 import 할 수 없어 표를 두 곳에 둔다.
+// 한쪽 판정을 바꾸면 그쪽 시험이 깨진다. 그때 두 표와 두 판정을 같이 고친다. [기록, 결재·알림·확인 중 세는 곳(없으면 '')]
+const SHARED_CASES: [object, string][] = [
+  [{ ask: ASK('request') }, 'request'],
+  [{ ask: ASK('notice') }, 'notice'],
+  [{ state: 'waiting' }, 'notice'],
+  [{ state: 'waiting', ask: ASK('request') }, 'request'],
+  [{ report: { lines: ['a'], at: 1 } }, 'report'],
+  [{ state: 'running', report: { lines: ['a'], at: 1 } }, 'report'],
+  [{ state: 'running', ask: ASK('request') }, ''],
+  [{ state: 'ended', ask: ASK('notice') }, ''],
+  [{ updatedAt: NOW - 91_000, ask: ASK('request') }, ''],
+  [{ ask: ASK('request', 5), askClosedAt: 5 }, ''],
+  [{ report: { lines: ['a'], at: 5 }, reportClosedAt: 5 }, ''],
+  [{}, ''],
+]
+
+test('띠의 개수는 session-board 와 같은 판정 기대값 표를 따른다', () => {
+  for (const [p, kind] of SHARED_CASES) {
+    const want = { request: 0, notice: 0, report: 0, ...(kind ? { [kind]: 1 } : {}) }
+    expect([p, countBoard([rec(p)], NOW)]).toEqual([p, want])
+  }
+})
+
 test('띠의 글은 0이 아닌 종류만 쓰고, 칸이 없으면 쓰지 않는다', () => {
   expect(asksText({ request: 1, notice: 2, report: 0 })).toBe('결재 1 · 알림 2')
   expect(asksText({ request: 0, notice: 0, report: 3 })).toBe('확인 3')

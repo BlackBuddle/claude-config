@@ -227,7 +227,8 @@ const BOARD_STALE_MS = 90_000 // session-board 와 같은 값: 이보다 오래 
 
 /**
  * session-board 의 기록 파일들에서 사용자를 기다리는 칸을 센다. 진행 중인 칸(이미 답함)과 끝난 세션은 세지 않는다.
- * shortcut: session-board 의 판정(asks.ts groupOf)을 여기에 다시 썼다. 모드끼리 코드를 나눌 수 없어서다. 한쪽을 고치면 다른 쪽도 고친다.
+ * shortcut: session-board 의 판정(asks.ts countAsks)을 여기에 다시 썼다. 모드끼리 코드를 나눌 수 없어서다. 한쪽을 고치면 다른 쪽도 고친다.
+ * 시험(register.test.ts)이 같은 기록으로 두 판정의 개수가 같은지 비교한다.
  */
 export function countBoard(texts: string[], now: number): { request: number; notice: number; report: number } {
   const n = { request: 0, notice: 0, report: 0 }
@@ -248,13 +249,25 @@ export function countBoard(texts: string[], now: number): { request: number; not
   return n
 }
 
+const boardFiles = new Map<string, { mtimeMs: number; size: number; text: string }>()
+
 async function readBoard($: any) {
   try {
     const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
     if (!home) return
     const dir = `${home}/.claude/session-board`
     const files = (await $.fs.list(dir)).filter((f: any) => f.kind === 'file' && f.name.endsWith('.json'))
-    const texts: string[] = await Promise.all(files.map((f: any) => $.fs.read(`${dir}/${f.name}`).then((t: unknown) => (typeof t === 'string' ? t : ''), () => '')))
+    const texts: string[] = await Promise.all(
+      files.map(async (f: any) => {
+        // 수정 시각과 크기가 같으면 다시 읽지 않는다: 띠는 5초마다 세고, 세션마다 이 일을 한다
+        const cached = boardFiles.get(f.name)
+        if (cached && cached.mtimeMs === f.mtimeMs && cached.size === f.size) return cached.text
+        const text = await $.fs.read(`${dir}/${f.name}`).then((t: unknown) => (typeof t === 'string' ? t : ''), () => '')
+        boardFiles.set(f.name, { mtimeMs: f.mtimeMs, size: f.size, text })
+        return text
+      }),
+    )
+    for (const name of [...boardFiles.keys()]) if (!files.some((f: any) => f.name === name)) boardFiles.delete(name) // 지워진 파일은 잊는다
     asks = countBoard(texts, Date.now())
   } catch {
     asks = NO_ASKS // 폴더가 없으면 칸이 없다

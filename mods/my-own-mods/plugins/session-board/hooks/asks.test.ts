@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { OLD_ASK_MS, STALE_MS, clipQuestion, closable, countAsks, groupOf, judge, openAsk, optionsLine, orphanIds, type Ask, type Watch } from './asks'
+import { OLD_ASK_MS, STALE_MS, clipQuestion, closable, countAsks, groupOf, judge, openAsk, optionsLine, orphanIds, purgeable, type Ask, type Watch } from './asks'
 import { signalsOf } from './signals'
 
 const NOW = 1_000_000_000_000
@@ -39,8 +39,18 @@ test('끝났거나 기록이 끊긴 세션도 칸이 있으면 남고, 칸이 �
   expect(groupOf(closed, NOW)).toBe('idle')
 })
 
-test('닫기는 알림, 끝난 세션, 24시간 넘은 결재에만 있다. 살아 있는 새 결재에는 없다', () => {
+test('정리: 하루 안 된 파일은 남기고, 열린 칸이 있으면 7일까지 남긴다. 깨진 파일은 하루 뒤에 지운다', () => {
+  const day = 24 * 60 * 60 * 1000
+  expect(purgeable(watch(), day / 2, day, 7 * day)).toBe(false)
+  expect(purgeable(watch(), 2 * day, day, 7 * day)).toBe(true)
+  expect(purgeable(watch({ ask: ask() }), 2 * day, day, 7 * day)).toBe(false)
+  expect(purgeable(watch({ report: { lines: ['a'], at: 1 } }), 8 * day, day, 7 * day)).toBe(true)
+  expect(purgeable(null, 2 * day, day, 7 * day)).toBe(true)
+})
+
+test('닫기는 알림, 끝난 세션, 24시간 넘은 결재에만 있다. 살아 있는 새 결재와 기록만 끊긴 세션의 결재에는 없다', () => {
   expect(closable(watch({ ask: ask() }), NOW)).toBe(false)
+  expect(closable(watch({ ask: ask(), updatedAt: NOW - STALE_MS - 1 }), NOW)).toBe(false) // 절전 직후일 수 있다
   expect(closable(watch({ ask: ask({ at: NOW - OLD_ASK_MS - 1 }) }), NOW)).toBe(true) // 낡음
   expect(closable(watch({ state: 'ended', ask: ask() }), NOW)).toBe(true)
   expect(closable(watch({ ask: ask({ kind: 'notice' }) }), NOW)).toBe(true)
@@ -87,6 +97,32 @@ test('띠의 개수는 사용자를 기다리는 칸만 센다. 진행 중과 �
     watch({ state: 'ended', ask: ask() }),
   ]
   expect(countAsks(list, NOW)).toEqual({ request: 1, notice: 2, report: 1 })
+})
+
+// 판정 기대값 표. relay-band 의 register.test.ts 에 같은 표가 있다(띠의 개수 countBoard). 모드끼리 import 할 수 없어 표를 두 곳에 둔다.
+// 한쪽 판정을 바꾸면 그쪽 시험이 깨진다. 그때 두 표와 두 판정을 같이 고친다. [기록, 결재·알림·확인 중 세는 곳(없으면 '')]
+const R = (at = NOW - 1000) => ask({ at })
+const N = () => ask({ kind: 'notice' })
+const SHARED_CASES: [Partial<Watch>, string][] = [
+  [{ ask: R() }, 'request'],
+  [{ ask: N() }, 'notice'],
+  [{ state: 'waiting' }, 'notice'],
+  [{ state: 'waiting', ask: R() }, 'request'],
+  [{ report: { lines: ['a'], at: 1 } }, 'report'],
+  [{ state: 'running', report: { lines: ['a'], at: 1 } }, 'report'],
+  [{ state: 'running', ask: R() }, ''],
+  [{ state: 'ended', ask: N() }, ''],
+  [{ updatedAt: NOW - 91_000, ask: R() }, ''],
+  [{ ask: R(5), askClosedAt: 5 }, ''],
+  [{ report: { lines: ['a'], at: 5 }, reportClosedAt: 5 }, ''],
+  [{}, ''],
+]
+
+test('띠의 개수는 relay-band 와 같은 판정 기대값 표를 따른다', () => {
+  for (const [p, kind] of SHARED_CASES) {
+    const want = { request: 0, notice: 0, report: 0, ...(kind ? { [kind]: 1 } : {}) }
+    expect([p, countAsks([watch(p)], NOW)]).toEqual([p, want])
+  }
 })
 
 test('이어받기로 번호가 바뀐 세션의 옛 칸은 주인이 없다. 앱 번호가 없으면 찾지 않는다', () => {
