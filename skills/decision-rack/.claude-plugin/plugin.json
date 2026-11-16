@@ -1,6 +1,0 @@
-{
-  "name": "decision-rack",
-  "version": "0.2.0",
-  "description": "사용자를 기다리는 세션을 대화에서 찾아 우측 패널에 칸으로 쌓아 보여준다",
-  "types": "./types/index.d.ts"
-}

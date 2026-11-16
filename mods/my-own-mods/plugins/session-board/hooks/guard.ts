@@ -23,7 +23,7 @@ type Recover = ['err' | 'warn' | 'mute', string]
 type Report = { summary: string; lines: string[]; more?: number; note?: string; unknown?: boolean; recover?: Recover[]; facts?: [string, string][] }
 type Risk = { kind: string; label: string; targets?: string[]; args?: string[]; dir?: string }
 // cwd: 영향을 잰 폴더. showCommand: 명령 펼침. leftMs: 기다릴 수 있는 남은 시간.
-type Held = { command: string; risk: Risk; report: Report | null; decision: string | null; where: 'pane' | 'band'; cwd: string; showCommand: boolean; leftMs: number; expand?: boolean }
+type Held = { command: string; risk: Risk; report: Report | null; decision: string | null; where: 'pane' | 'band'; cwd: string; showCommand: boolean; leftMs: number }
 
 // 붙잡고 있는 호출. 한 번에 하나만.
 let held: Held | null = null
@@ -635,326 +635,12 @@ const TITLE: Record<string, string> = {
 }
 const CMD_LINES = 6
 
-// ---- Aurora Console 토큰: aurora-console-redesign/tokens.css 의 다크 값 사본. 색 값은 이 블록에서만 쓴다 ----
-// 사용자 결정(규칙 3 변경): 데스크톱 카드는 앱 테마와 관계없이 다크 팔레트로 고정한다. 모드는 앱 테마를 읽을 수 없다.
-const AURORA = { line: '#2A3055', accent: '#7C93FF', accent2: '#A78BFA', ok: '#34D399', warn: '#FBBF24', danger: '#FB7185' }
-// 호스트 요소(Box·Text)에 칠하는 고정 색: 카드 면과 글자, 터미널 면, 호박 알약과 그 위 잉크, 버튼 칩.
-const FIXED = {
-  surface: '#161A30', text: '#ECEEFB', dim: '#8F95B8', terminal: '#0A0D1C', terminalText: '#C9CEEA',
-  ok: '#34D399', danger: '#FB7185', dangerBg: '#3A1522', dangerKbd: '#5A1F35', warn: '#FBBF24', ink: '#14172B',
-  primary: '#4F6BFF', primaryKbd: '#3A4FD1', white: '#FFFFFF',
-}
-const cssVars = (p: Record<string, string>) => Object.entries(p).map(([k, v]) => `--${k}:${v}`).join(';')
-const aurora = (w: number, h: number, body: string, box = `0 0 ${w} ${h}`) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${box}"><style>:root{${cssVars(AURORA)}}</style>${body}</svg>`
-const grad = (id: string, a: string, b: string) => `<defs><linearGradient id="${id}"><stop offset="0" stop-color="var(--${a})"/><stop offset="1" stop-color="var(--${b})"/></linearGradient></defs>`
-const BAR_W = 320
-// 시안의 4px 위험 막대는 카드 높이를 모르므로 윗변 줄로 대신한다(규칙 23). 글로우는 쓰지 않았다.
-const strip = () => aurora(BAR_W, 4, `${grad('g', 'danger', 'warn')}<rect width="${BAR_W}" height="4" fill="url(#g)"/>`)
-const countdown = (leftMs: number) => {
-  const r = Math.max(0, Math.min(1, leftMs / HOLD_LIMIT_MS))
-  const fill = leftMs <= 30_000 ? 'var(--danger)' : 'url(#g)' // 마지막 30초는 로즈
-  return aurora(BAR_W, 4, `${grad('g', 'accent', 'accent2')}<rect width="${BAR_W}" height="4" rx="2" fill="var(--line)"/><rect width="${Math.round(BAR_W * r)}" height="4" rx="2" fill="${fill}"/>`)
-}
-// 아이콘은 stroke 2, 둥근 끝(규칙 11). 24 칸 격자에 그리고 px 로 줄인다.
-const ICONS = { warn: '<path d="M12 3 2.5 20h19L12 3z"/><path d="M12 10v4"/><path d="M12 17.5v.01"/>', alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5"/><path d="M12 16v.01"/>' }
-const icon = (name: keyof typeof ICONS, color: string, px: number) =>
-  aurora(px, px, `<g fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</g>`, '0 0 24 24')
-
-const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-/** 명령 글자를 칠한다: 위험 명령은 로즈 굵게 밑줄, 풀지 못한 변수는 호박, 나머지는 연하게(규칙 15). */
-function highlight(Text: any, text: string, label: string) {
-  const re = new RegExp(`(${label !== '' ? `${esc(label)}|` : ''}\\$\\{?\\w+\\}?|%\\w+%)`)
-  return text
-    .split(re)
-    .filter(p => p !== '')
-    .map((p, i) => {
-      if (label !== '' && p === label) return Text({ key: `c${i}`, mono: true, color: FIXED.danger, bold: true, underline: true, children: p })
-      if (/^[$%]/.test(p)) return Text({ key: `c${i}`, mono: true, color: FIXED.warn, bold: true, children: p })
-      return Text({ key: `c${i}`, mono: true, color: FIXED.terminalText, children: p })
-    })
-}
-
-const FOLD_CHARS = 100
-/** 접힌 명령의 미리보기. 위험 명령(label)이 접힌 뒤쪽에 있어도 가려지지 않도록 그 둘레를 함께 보인다. */
-export function foldCommand(cmd: string, label: string): string {
-  const head = cmd.split('\n').slice(0, 2).join('\n')
-  if (head.length <= FOLD_CHARS) return `${head} …`
-  const at = label !== '' ? cmd.indexOf(label) : -1
-  if (at >= FOLD_CHARS - label.length) return `${cmd.slice(0, 40)} … ${cmd.slice(Math.max(0, at - 20), at + label.length + 40)} …`
-  return `${head.slice(0, FOLD_CHARS)} …`
-}
-
 const RECOVER_COLOR: Record<string, string | undefined> = { err: 'error', warn: 'warning', mute: undefined }
-const RECOVER_RICH: Record<string, string> = { err: FIXED.danger, warn: FIXED.warn, mute: FIXED.dim }
-const BADGE_RICH: Record<string, string> = { M: FIXED.warn, A: FIXED.ok, D: FIXED.danger }
 const BADGE: Record<string, string> = { M: 'warning', A: 'success', D: 'error' }
 
 function clock(ms: number): string {
   const s = Math.max(0, Math.ceil(ms / 1000))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
-
-// ---- 데스크톱 카드: my-own-mods UI UX 리디자인.html 의 7번(edit-guard 수정안, 라이트) 수치대로 그린다 ----
-// 카드는 Svg 이미지 조각(위·명령·아래)과 호스트 버튼 줄을 쌓아 만든다. 색·치수는 이 블록에서만 쓴다.
-// 시안과 다른 점(규칙 23): 글꼴은 맑은 고딕·Consolas 로 대체, 카드 바깥 글로우·그림자는 이미지 경계 밖이라 없음,
-// 카드 바탕 그라데이션은 위 조각에만, 파일별 크기는 측정값에 없어 뺐다.
-const K = {
-  w: 290, padL: 24, padR: 20, padT: 20, // 폭은 앱 패널 폭(약 280px)에 맞춰 이미지가 줄지 않게 한다(시안은 360 이라 글씨가 78% 로 작아졌다)
-  text: '#14172B', dim: '#5B6080', line: '#E3E6F2', soft: '#EEF0F8', white: '#FFFFFF',
-  amber: '#F59E0B', amberBg: '#FEF3C7', amberText: '#92400E', rose: '#F43F5E', roseText: '#BE123C', roseBg: '#FFE4E8',
-  roseTint: '#FFF1F3', amberTint: '#FFF8E6', roseBorder: '#F9B4BF', amberBorder: '#F6D58A',
-  accent: '#4F6BFF', btn: '#3F5BEF', btnKbd: '#697FF2', ok: '#047857',
-  term: '#14172B', termText: '#A9AECB', termWarn: '#FBBF24', termDanger: '#FB7185',
-}
-const SANS = "'Noto Sans KR','Malgun Gothic',system-ui,sans-serif"
-const MONO = "'JetBrains Mono',Consolas,monospace"
-type Run = { t: string; fill: string; weight?: number; mono?: boolean; under?: boolean }
-const isWide = (ch: string) => /[ᄀ-ᇿ⺀-꓏가-힣豈-﫿＀-｠]/.test(ch)
-const cw = (ch: string, size: number, mono?: boolean) => (isWide(ch) ? size : size * (mono ? 0.6 : 0.56))
-const xml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-
-/** 글자 폭을 어림해 줄을 나눈다. byWord 면 공백에서 먼저 끊는다(한글 keep-all). */
-function layout(runs: Run[], max: number, size: number, byWord: boolean): Run[][] {
-  type Ch = { ch: string; r: Run }
-  const lines: Ch[][] = []
-  let cur: Ch[] = []
-  let w = 0
-  const widthOf = (cs: Ch[]) => cs.reduce((n, c) => n + cw(c.ch, size, c.r.mono), 0)
-  for (const r of runs) {
-    for (const ch of r.t) {
-      if (ch === '\n') {
-        lines.push(cur)
-        cur = []
-        w = 0
-        continue
-      }
-      const cwid = cw(ch, size, r.mono)
-      if (w + cwid > max && cur.length > 0) {
-        const sp = byWord ? cur.map(c => c.ch).lastIndexOf(' ') : -1
-        const cut = sp > 0 ? sp + 1 : cur.length
-        lines.push(cur.slice(0, cut))
-        cur = cur.slice(cut)
-        w = widthOf(cur)
-      }
-      cur.push({ ch, r })
-      w += cwid
-    }
-  }
-  lines.push(cur)
-  return lines.map(cs => {
-    const groups: { r: Run; t: string }[] = []
-    for (const c of cs) {
-      const g = groups[groups.length - 1]
-      if (g && g.r === c.r) g.t += c.ch
-      else groups.push({ r: c.r, t: c.ch })
-    }
-    if (groups.length > 0) groups[groups.length - 1].t = groups[groups.length - 1].t.replace(/\s+$/, '')
-    return groups.map(g => ({ ...g.r, t: g.t }))
-  })
-}
-
-const lineSvg = (runs: Run[], px: number, py: number, size: number, extra = '') =>
-  `<text x="${px}" y="${py}" font-size="${size}" xml:space="preserve"${extra}>${runs
-    .map(r => `<tspan fill="${r.fill}" font-family="${r.mono ? MONO : SANS}" font-weight="${r.weight ?? 400}"${r.under ? ' text-decoration="underline"' : ''}>${xml(r.t)}</tspan>`)
-    .join('')}</text>`
-const sv = (h: number, body: string, defs = '') =>
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${K.w}" height="${h}" viewBox="0 0 ${K.w} ${h}">${defs === '' ? '' : `<defs>${defs}</defs>`}${body}</svg>`
-const ICON_PATHS = { warn: ['M12 3 2 20h20L12 3z', 'M12 10v4M12 17.5v.01'], file: ['M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z', 'M14 3v5h5'] }
-const ico = (name: keyof typeof ICON_PATHS, px: number, py: number, size: number, color: string, sw: number) =>
-  `<g transform="translate(${px} ${py}) scale(${size / 24})" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name].map(d => `<path d="${d}"/>`).join('')}</g>`
-/** 너무 긴 글자는 앞을 줄이고 끝(파일 이름)을 남긴다. */
-function clipText(s: string, maxW: number, size: number, mono: boolean): string {
-  if ([...s].reduce((n, ch) => n + cw(ch, size, mono), 0) <= maxW) return s
-  let out = s
-  while (out.length > 1 && [...`…${out}`].reduce((n, ch) => n + cw(ch, size, mono), 0) > maxW) out = out.slice(1)
-  return `…${out}`
-}
-/** 경로들이 함께 가진 폴더. 목록에서 이 폴더를 빼면 파일 이름만 남는다. */
-function commonDir(paths: string[]): string {
-  const dirs = paths.map(p => p.split('/').slice(0, -1))
-  if (dirs.length === 0) return ''
-  let n = dirs[0].length
-  for (const d of dirs) {
-    let i = 0
-    while (i < n && d[i] === dirs[0][i]) i += 1
-    n = i
-  }
-  return dirs[0].slice(0, n).join('/')
-}
-const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-/** 명령 글자: 위험 명령은 로즈 굵게 밑줄, 풀지 못한 변수는 호박, 나머지는 연하게. */
-function cmdRuns(command: string, label: string): Run[] {
-  const re = new RegExp(`(${label !== '' ? `${escRe(label)}|` : ''}\\$\\{?\\w+\\}?|%\\w+%)`)
-  const runs: Run[] = [{ t: '$ ', fill: K.termText, mono: true }]
-  for (const p of command.split(re)) {
-    if (p === '') continue
-    if (label !== '' && p === label) runs.push({ t: p, fill: K.termDanger, weight: 700, mono: true, under: true })
-    else if (/^[$%]/.test(p)) runs.push({ t: p, fill: K.termWarn, mono: true })
-    else runs.push({ t: p, fill: K.termText, mono: true })
-  }
-  return runs
-}
-
-function drawRich(t: any, state: Held) {
-  const { Box, Text, Button, Svg } = t
-  const report = state.report as Report
-  const unknown = report.unknown === true
-  const cwd = state.cwd.replace(/\\/g, '/')
-  const rel = (p: string) => {
-    const q = p.replace(/\\/g, '/')
-    return cwd !== '' && q.startsWith(`${cwd}/`) ? q.slice(cwd.length + 1) : q
-  }
-  const decide = (choice: string) => () => {
-    if (state.decision === null) state.decision = choice
-  }
-  const innerW = K.w - K.padL - K.padR
-  const urgent = state.leftMs <= 30_000
-  const showCmd = state.showCommand || unknown
-  const leftBar = (h: number) => `<rect x="0" y="0" width="4" height="${h}" fill="${unknown ? K.rose : K.amber}"/>` // 단색: 그라데이션은 AI 티가 나서 뺐다
-
-  // ① 위 조각: 알약, 위험 명령 이름, 제목, 복구·원인, 위치와 목록
-  const A: string[] = []
-  let y = K.padT
-  const label = unknown ? '영향 범위 모름' : (TITLE[state.risk.kind] ?? state.risk.label)
-  const pillW = 8 + 14 + 6 + [...label].reduce((n, ch) => n + cw(ch, 12) * 1.05, 0) + 10
-  A.push(`<rect x="${K.padL}" y="${y}" width="${pillW}" height="24" rx="12" fill="${K.amberBg}"/>`)
-  A.push(ico('warn', K.padL + 8, y + 5, 14, K.amberText, 2.4))
-  A.push(lineSvg([{ t: label, fill: K.amberText, weight: 700 }], K.padL + 28, y + 16, 12))
-  A.push(lineSvg([{ t: state.risk.label, fill: K.roseText, weight: 700, mono: true }], K.w - K.padR, y + 17, 13, ' text-anchor="end"'))
-  y += 24 + 14
-  const hero = layout([{ t: report.summary, fill: K.text, weight: 700 }], innerW, 20, true)
-  hero.forEach((l, i) => A.push(lineSvg(l, K.padL, y + 21 + i * 28, 20)))
-  y += hero.length * 28 + (unknown ? 4 : 8)
-  for (const [lv, tx] of report.recover ?? []) {
-    if (lv === 'mute') {
-      const ls = layout([{ t: tx, fill: K.dim }], innerW, 13, true)
-      ls.forEach((l, i) => A.push(lineSvg(l, K.padL, y + 14 + i * 19.5, 13)))
-      y += ls.length * 19.5 + 14
-      continue
-    }
-    const [head, ...rest] = tx.replace(/^[⚠✗]\s*/, '').split(' · ')
-    const isErr = lv === 'err'
-    // 경고 아이콘은 위쪽 알약에만 둔다. 줄마다 반복하면 AI 가 만든 화면처럼 보인다.
-    A.push(lineSvg([{ t: head, fill: isErr ? K.roseText : K.amberText, weight: 700 }], K.padL, y + 15, 13))
-    y += 20
-    if (rest.length > 0) {
-      const ls = layout([{ t: rest.join(' · '), fill: K.dim }], innerW, 12, true)
-      ls.forEach((l, i) => A.push(lineSvg(l, K.padL, y + 16 + i * 18, 12)))
-      y += 4 + ls.length * 18 + 14
-    } else y += 8
-  }
-  const codeRe = /(\$\{?\w+\}?|%\w+%|\bbash\b|\bgit\b)/
-  const facts = report.facts ?? []
-  facts.forEach(([k, v]) => {
-    const runs: Run[] = v.split(codeRe).filter(p => p !== '').map(p => (codeRe.test(p) ? { t: p, fill: K.amberText, mono: true } : { t: p, fill: K.text }))
-    const ls = layout(runs, innerW - 38, 13, true)
-    A.push(lineSvg([{ t: k, fill: K.dim }], K.padL, y + 15, 13))
-    ls.forEach((l, j) => A.push(lineSvg(l, K.padL + 38, y + 15 + j * 19.5, 13)))
-    y += Math.max(20, ls.length * 19.5) + 8
-  })
-  if (facts.length > 0) y += 4
-  if (!unknown) {
-    A.push(lineSvg([{ t: '위치', fill: K.dim }], K.padL, y + 12, 11))
-    y += 17 + 6
-    const path = clipText(state.cwd, innerW - 20, 12, true)
-    const pw = Math.min(innerW, [...path].reduce((n, ch) => n + cw(ch, 12, true), 0) + 20)
-    A.push(`<rect x="${K.padL}" y="${y}" width="${pw}" height="26" rx="8" fill="${K.soft}"/>`)
-    A.push(lineSvg([{ t: path, fill: K.text, mono: true }], K.padL + 10, y + 17, 12))
-    y += 26 + 12
-  }
-  // 지우는 폴더가 같은 파일들은 그 폴더를 빼고 이름만 보인다.
-  const plainLines = report.lines.filter(l => !/^[0-9a-f]{7,40} /.test(l) && !/^[ MADRCU?!]{2} /.test(l)).map(l => l.replace(/\\/g, '/'))
-  const common = commonDir(plainLines)
-  const shortPath = (p: string) => {
-    const q = p.replace(/\\/g, '/')
-    return common !== '' && q.startsWith(`${common}/`) ? q.slice(common.length + 1) : rel(p)
-  }
-  report.lines.forEach(line => {
-    A.push(`<rect x="${K.padL}" y="${y}" width="${innerW}" height="28" rx="8" fill="${K.soft}"/>`)
-    const commit = /^([0-9a-f]{7,40}) (.*)$/.exec(line)
-    const st = /^([ MADRCU?!]{2}) (.+)$/.exec(line)
-    if (commit) {
-      A.push(lineSvg([{ t: commit[1], fill: K.dim, mono: true }], K.padL + 10, y + 18, 12))
-      A.push(lineSvg([{ t: clipText(commit[2], innerW - 20 - 66, 12, false), fill: K.text }], K.padL + 10 + 66, y + 18, 12))
-    } else if (st) {
-      const letter = st[1][0] !== ' ' ? st[1][0] : st[1][1]
-      const color = letter === 'D' ? K.roseText : letter === 'A' ? K.ok : K.amberText
-      A.push(lineSvg([{ t: letter, fill: color, weight: 700, mono: true }], K.padL + 10, y + 18, 12))
-      A.push(lineSvg([{ t: clipText(rel(st[2]), innerW - 20 - 22, 12, true), fill: K.text, mono: true }], K.padL + 10 + 22, y + 18, 12))
-    } else {
-      A.push(ico('file', K.padL + 10, y + 7, 14, K.dim, 2))
-      A.push(lineSvg([{ t: clipText(shortPath(line), innerW - 20 - 22, 12, true), fill: K.text, mono: true }], K.padL + 10 + 22, y + 18, 12))
-    }
-    y += 28 + 6
-  })
-  if (report.lines.length > 0) y += 4
-  if (report.more) {
-    A.push(lineSvg([{ t: `+ ${report.more}개 더`, fill: K.dim }], K.padL, y + 12, 12))
-    y += 22
-  }
-  if (report.note) {
-    const ls = layout([{ t: report.note, fill: K.dim }], innerW, 12, true)
-    ls.forEach((l, i) => A.push(lineSvg(l, K.padL, y + 12 + i * 18, 12)))
-    y += ls.length * 18 + 10
-  }
-  const hA = y
-  const svgA = sv(hA, `${leftBar(hA)}${A.join('')}`)
-
-  // ② 명령 조각: 어두운 터미널 면, 3줄까지만 보이고 "더 보기" 로 펼친다
-  let svgC: string | null = null
-  let hC = 0
-  let overflow = false
-  if (showCmd) {
-    const all = layout(cmdRuns(state.command, state.risk.label), innerW - 28, 12, false)
-    overflow = all.length > 3
-    const labelAt = all.findIndex(l => l.some(r => r.under))
-    const from = !state.expand && labelAt >= 3 ? labelAt - 1 : 0 // 접어도 위험 명령이 가려지지 않게 그 줄로 옮긴다
-    const count = state.expand ? Math.min(all.length, 14) : Math.min(all.length, 3)
-    const shown = all.slice(from, from + count)
-    if (from > 0) shown[0] = [{ t: '… ', fill: K.termText, mono: true }, ...shown[0]]
-    const h = 24 + shown.length * 20.4
-    const body = [`<rect x="${K.padL}" y="0" width="${innerW}" height="${h}" rx="10" fill="${K.term}"/>`]
-    shown.forEach((l, i) => body.push(lineSvg(l, K.padL + 14, 12 + 15 + i * 20.4, 12)))
-    svgC = sv(h, `${leftBar(h)}${body.join('')}`)
-    hC = h
-  }
-
-  // ③ 아래 조각: 남은 시간 글자 + 줄어드는 막대(마지막 30초는 로즈 단색)
-  const ratio = Math.max(0, Math.min(1, state.leftMs / HOLD_LIMIT_MS))
-  const hB = 14 + 18 + 6 + 3 + K.padT
-  const fillBar = urgent ? K.rose : K.text // 평소는 검정 단색, 마지막 30초만 로즈
-  const svgB = sv(
-    hB,
-    `${leftBar(hB)}${lineSvg([{ t: 'Claude 가 기다리는 중', fill: K.dim }], K.padL, 14 + 13, 12)}${lineSvg([{ t: clock(state.leftMs), fill: urgent ? K.roseText : K.text, weight: 700, mono: true }, { t: ' 남음', fill: urgent ? K.roseText : K.text, weight: 700 }], K.w - K.padR, 14 + 13, 12, ' text-anchor="end"')}` +
-      `<rect x="${K.padL}" y="${14 + 18 + 6}" width="${innerW}" height="3" rx="1.5" fill="${K.line}"/><rect x="${K.padL}" y="${14 + 18 + 6}" width="${Math.max(2, Math.round(innerW * ratio))}" height="3" rx="1.5" fill="${fillBar}"/>`,
-  )
-
-  // 눌러야 하는 것은 호스트 기본 버튼이다. 버튼 안에 색 칩을 넣는 시도는 호스트가 그리지 않아 되돌렸다(캡처로 확인, 규칙 23).
-  const proceed = unknown ? '그래도 진행' : '진행'
-  const link = (key: string, text: string, onPress: () => void) => Box({ key: `${key}row`, paddingLeft: 3, children: [Button({ key, label: text, variant: 'secondary', onPress })] })
-  // 크기를 고정한다: 크기를 안 주면 넓은 패널(오른쪽 도크)에서 이미지가 패널 폭에 맞춰 몇 배로 커진다.
-  const kids: any[] = [Svg({ key: 'a', source: svgA, alt: `${label}: ${report.summary}`, width: K.w, height: hA })]
-  if (!unknown) kids.push(link('cmdtoggle', state.showCommand ? '▾ 명령 접기' : '▸ 명령 보기', () => { state.showCommand = !state.showCommand }))
-  if (svgC !== null) {
-    kids.push(Svg({ key: 'c', source: svgC, alt: `실행할 명령: ${state.command}`, width: K.w, height: hC }))
-    if (overflow) kids.push(link('more', state.expand ? '접기 ▴' : '더 보기 ▾', () => { state.expand = !state.expand }))
-  }
-  kids.push(
-    Box({
-      key: 'buttons',
-      paddingLeft: 3,
-      paddingTop: 1,
-      gap: 1,
-      children: [
-        Button({ key: 'cancel', label: '취소', hotkey: '1', autoFocus: true, onPress: decide('cancel') }),
-        Button({ key: 'proceed', label: proceed, hotkey: '2', onPress: decide('proceed') }),
-      ],
-    }),
-    Svg({ key: 'b', source: svgB, alt: `남은 시간 ${clock(state.leftMs)}`, width: K.w, height: hB }),
-  )
-  return Box({ flexDirection: 'column', borderStyle: 'round', borderColor: unknown ? K.roseBorder : K.amberBorder, backgroundColor: K.white, children: kids })
 }
 
 // 시안의 읽는 순서: 영향(큰 글씨) → 복구 → 위치 → 목록 → 명령 → 버튼 → 남은 시간.
@@ -963,14 +649,7 @@ export function draw(t: any, state: Held, compact = false, surface = 'desktop') 
   // 데스크톱·터미널 모두 앱 기본 부품으로 그린다: 세션 보드 칸과 같은 결재함 틀(얇은 칸, ● 머리글, 테마 뜻 색)이다 (2026-11-16 사용자 결정 B안)
   // 입력창 위 띠(compact)는 한 줄 구성이다
   void surface
-  const { Box, Text, Button, Svg } = t
-  const rich = false // 아래는 글자 디자인 전용이다. rich 분기는 drawRich 로 옮겨 가서 더는 타지 않는다.
-  // 데스크톱 카드는 다크 고정이라 글자 색을 직접 칠한다(앱이 라이트 테마여도 읽히게). 터미널은 테마 색을 그대로 쓴다.
-  const T = (p: any) => {
-    if (!rich) return Text(p)
-    const { dimColor, color, ...rest } = p
-    return Text({ ...rest, color: dimColor ? FIXED.dim : (color ?? FIXED.text) })
-  }
+  const { Box, Text, Button } = t
   const report = state.report as Report
   const unknown = report.unknown === true
   const cwd = state.cwd.replace(/\\/g, '/')
@@ -982,57 +661,22 @@ export function draw(t: any, state: Held, compact = false, surface = 'desktop') 
   const decide = (choice: string) => () => {
     if (state.decision === null) state.decision = choice
   }
-  // 데스크톱: 안전한 선택(취소)은 인디고 칩, 위험한 선택(진행)은 짙은 로즈 칩. 순서와 단축키 1·2 는 그대로다(규칙 15).
-  const chip = (label: string, kbd: string, fg: string, bg: string, kbdBg: string) => [
-    Text({ key: 'l', bold: true, color: fg, backgroundColor: bg, children: ` ${label} ` }),
-    Text({ key: 'k', mono: true, color: fg, backgroundColor: kbdBg, children: ` ${kbd} ` }),
-  ]
   const proceedLabel = unknown ? '그래도 진행' : '진행'
   const buttons = Box({
     key: 'buttons',
     gap: 2,
-    children: rich
-      ? [
-          Button({ key: 'cancel', label: '취소', hotkey: '1', plain: true, autoFocus: true, onPress: decide('cancel'), children: chip('취소', '1', FIXED.white, FIXED.primary, FIXED.primaryKbd) }),
-          Button({ key: 'proceed', label: proceedLabel, hotkey: '2', plain: true, onPress: decide('proceed'), children: chip(proceedLabel, '2', FIXED.danger, FIXED.dangerBg, FIXED.dangerKbd) }),
-        ]
-      : [
-          Button({ key: 'cancel', label: '취소', hotkey: '1', variant: 'primary', autoFocus: true, onPress: decide('cancel') }),
-          Button({ key: 'proceed', label: proceedLabel, hotkey: '2', variant: 'secondary', onPress: decide('proceed') }),
-        ],
+    children: [
+      Button({ key: 'cancel', label: '취소', hotkey: '1', variant: 'primary', autoFocus: true, onPress: decide('cancel') }),
+      Button({ key: 'proceed', label: proceedLabel, hotkey: '2', variant: 'secondary', onPress: decide('proceed') }),
+    ],
   })
   const wait = Text({ key: 'wait', dimColor: true, size: 'caption', children: `Claude 가 기다리는 중 · ${clock(state.leftMs)} 남음` })
   const title = unknown ? '? 영향 범위 모름' : `⚠ ${TITLE[state.risk.kind] ?? state.risk.label}`
   const titleColor = unknown ? 'inactive' : 'warning'
   // 모름은 빨강(위험 단정)이 아니라 평범한 글자색으로 그린다.
   const heroColor = unknown ? undefined : 'error'
-  // 위험·주의는 아이콘 + 글자 + 호박 바탕으로 말한다. "영향 범위 모름" 이 안전으로 읽히지 않게 회색을 쓰지 않는다(규칙 15).
-  const pill = rich
-    ? Box({
-        key: 't',
-        gap: 1,
-        paddingX: 1,
-        alignItems: 'center',
-        backgroundColor: FIXED.warn,
-        children: [
-          Svg({ key: 'i', source: icon('warn', FIXED.ink, 14), alt: '경고', width: 14, height: 14 }),
-          Text({ key: 'x', bold: true, color: FIXED.ink, children: unknown ? '영향 범위 모름' : (TITLE[state.risk.kind] ?? state.risk.label) }),
-        ],
-      })
-    : // 세션 보드 머리글과 같은 모양: 색 점 + 작은 글자. 위험은 빨강(error), 모름은 흐린 글자(안전으로 읽히지 않게 "모름"을 글로 쓴다)
-      Text({ key: 't', color: unknown ? undefined : 'error', dimColor: unknown, size: 'caption', weight: 'semibold', children: `● ${unknown ? '영향 범위 모름' : (TITLE[state.risk.kind] ?? state.risk.label)}` })
-  // 남은 시간은 글자 + 줄어드는 가는 막대. 마지막 30초는 로즈.
-  const urgent = state.leftMs <= 30_000
-  const waitRich = rich
-    ? Box({
-        key: 'wait',
-        flexDirection: 'column',
-        children: [
-          Box({ key: 'wl', justifyContent: 'space-between', children: [T({ key: 'a', dimColor: true, children: 'Claude 가 기다리는 중' }), T({ key: 'b', bold: urgent, color: urgent ? FIXED.danger : undefined, children: `${clock(state.leftMs)} 남음` })] }),
-          Svg({ key: 'bar', source: countdown(state.leftMs), alt: `남은 시간 ${clock(state.leftMs)}` }),
-        ],
-      })
-    : null
+  // 세션 보드 머리글과 같은 모양: 색 점 + 작은 글자. 위험은 빨강(error), 모름은 흐린 글자(안전으로 읽히지 않게 "모름"을 글로 쓴다)
+  const pill = Text({ key: 't', color: unknown ? undefined : 'error', dimColor: unknown, size: 'caption', weight: 'semibold', children: `● ${unknown ? '영향 범위 모름' : (TITLE[state.risk.kind] ?? state.risk.label)}` })
 
   if (compact) {
     const first = report.recover?.[0]
@@ -1061,16 +705,16 @@ export function draw(t: any, state: Held, compact = false, surface = 'desktop') 
   // 목록: 변경 상태(M A D)는 글자 배지로, 커밋은 짧은 해시를 흐리게.
   const row = (line: string, i: number) => {
     const commit = /^([0-9a-f]{7,40}) (.*)$/.exec(line)
-    if (commit) return Box({ key: `l${i}`, gap: 1, children: [T({ dimColor: true, mono: true, children: commit[1] }), T({ wrap: 'truncate-end', children: commit[2] })] })
+    if (commit) return Box({ key: `l${i}`, gap: 1, children: [Text({ dimColor: true, mono: true, children: commit[1] }), Text({ wrap: 'truncate-end', children: commit[2] })] })
     const st = /^([ MADRCU?!]{2}) (.+)$/.exec(line)
     if (st) {
       const letter = st[1][0] !== ' ' ? st[1][0] : st[1][1]
-      return Box({ key: `l${i}`, gap: 1, children: [T({ color: rich ? (BADGE_RICH[letter] ?? FIXED.dim) : (BADGE[letter] ?? 'inactive'), bold: true, mono: true, children: letter }), T({ mono: true, wrap: 'truncate-end', children: rel(st[2]) })] })
+      return Box({ key: `l${i}`, gap: 1, children: [Text({ color: BADGE[letter] ?? 'inactive', bold: true, mono: true, children: letter }), Text({ mono: true, wrap: 'truncate-end', children: rel(st[2]) })] })
     }
-    return T({ key: `l${i}`, mono: true, wrap: 'truncate-end', children: rel(line) })
+    return Text({ key: `l${i}`, mono: true, wrap: 'truncate-end', children: rel(line) })
   }
   const list = report.lines.map(row)
-  if (report.more) list.push(T({ key: 'more', dimColor: true, children: `+ ${report.more}개 더` }))
+  if (report.more) list.push(Text({ key: 'more', dimColor: true, children: `+ ${report.more}개 더` }))
   // 명령 상자는 몇 줄만 보인다. 명령 안의 변수($D 같은 것)는 오류 색으로 표시한다.
   const cmdLines = state.command.split('\n')
   const shownCmd = cmdLines.length > CMD_LINES ? `${cmdLines.slice(0, CMD_LINES).join('\n')}\n… 외 ${cmdLines.length - CMD_LINES}줄` : state.command
@@ -1083,28 +727,6 @@ export function draw(t: any, state: Held, compact = false, surface = 'desktop') 
   const boxed = state.showCommand || unknown
   const factRows = (report.facts ?? []).map(([k, v], i) => Box({ key: `fact${i}`, gap: 2, children: [Text({ key: 'k', dimColor: true, children: k }), Text({ key: 'v', wrap: 'wrap', children: v })] }))
 
-  // 원인 행은 아이콘 + 이름표 + 값. 근거와 명령을 가깝게 두되, 명령은 어두운 터미널 면에 따로 놓는다.
-  const factRowsRich = rich
-    ? (report.facts ?? []).map(([k, v], i) =>
-        Box({ key: `fact${i}`, gap: 1, alignItems: 'center', children: [Svg({ key: 'i', source: icon('alert', FIXED.warn, 14), alt: k, width: 14, height: 14 }), T({ key: 'k', dimColor: true, children: k }), T({ key: 'v', wrap: 'wrap', children: v })] }),
-      )
-    : []
-  // 두 줄을 넘거나 100자를 넘는 명령은 접고 "더 보기" 로 펼친다(규칙 15, 글자 수 기준은 사용자 결정).
-  const long = cmdLines.length > 2 || state.command.length > FOLD_CHARS
-  const folded = long && !state.expand
-  const termBox = rich
-    ? Box({
-        key: 'cmdbox',
-        flexDirection: 'column',
-        gap: 1,
-        backgroundColor: FIXED.terminal,
-        paddingX: 1,
-        children: [
-          Text({ key: 'cmd', mono: true, wrap: 'wrap', children: highlight(Text, folded ? foldCommand(state.command, state.risk.label) : state.command, state.risk.label) }),
-          long ? Button({ key: 'more', label: folded ? '더 보기 ▾' : '접기 ▴', plain: true, onPress: () => { state.expand = !state.expand }, children: [Text({ key: 'm', color: FIXED.dim, children: folded ? '더 보기 ▾' : '접기 ▴' })] }) : null,
-        ],
-      })
-    : null
 
   // 세션 보드 칸과 같은 틀: 얇은 테두리(subtle), 안쪽 여백 md·sm, 굵은 글은 제목 한 줄만
   return Box({
@@ -1120,21 +742,21 @@ export function draw(t: any, state: Held, compact = false, surface = 'desktop') 
         key: 'hd',
         justifyContent: 'space-between',
         gap: 1,
-        children: [pill, T({ key: 'chip', mono: true, size: 'caption', wrap: 'truncate-end', dimColor: true, children: state.risk.label })],
+        children: [pill, Text({ key: 'chip', mono: true, size: 'caption', wrap: 'truncate-end', dimColor: true, children: state.risk.label })],
       }),
-      T({ key: 'hero', weight: 'semibold', wrap: 'wrap', children: report.summary }),
-      ...(report.recover ?? []).map(([lv, text], i) => T({ key: `rec${i}`, color: rich ? RECOVER_RICH[lv] : RECOVER_COLOR[lv], dimColor: !rich && lv === 'mute', wrap: 'wrap', children: text })),
+      Text({ key: 'hero', weight: 'semibold', wrap: 'wrap', children: report.summary }),
+      ...(report.recover ?? []).map(([lv, text], i) => Text({ key: `rec${i}`, color: RECOVER_COLOR[lv], dimColor: lv === 'mute', wrap: 'wrap', children: text })),
       // 시안 C(모름)에는 위치 줄이 없다. 영향을 잰 폴더는 잰 뒤에만 의미가 있다.
       // 위치는 지울 목록이 있을 때만 뜻이 있다. 지울 것이 없으면 줄을 줄이려고 뺀다
-      unknown || report.lines.length === 0 ? null : Box({ key: 'where', flexDirection: 'column', children: [T({ key: 'k', dimColor: true, children: '위치' }), T({ key: 'v', mono: true, wrap: 'truncate-middle', children: state.cwd })] }),
-      ...(rich ? factRowsRich : boxed ? [] : factRows),
+      unknown || report.lines.length === 0 ? null : Box({ key: 'where', flexDirection: 'column', children: [Text({ key: 'k', dimColor: true, children: '위치' }), Text({ key: 'v', mono: true, wrap: 'truncate-middle', children: state.cwd })] }),
+      ...(boxed ? [] : factRows),
       list.length > 0 ? Box({ key: 'list', flexDirection: 'column', children: list }) : null,
-      report.note ? T({ key: 'note', dimColor: true, italic: true, children: report.note, wrap: 'wrap' }) : null,
+      report.note ? Text({ key: 'note', dimColor: true, italic: true, children: report.note, wrap: 'wrap' }) : null,
       // 모름 패널은 명령 상자만 항상 보이고 접기 버튼이 없다(시안 C).
-      unknown ? null : Button({ key: 'cmdtoggle', label: state.showCommand ? '▾ 명령 접기' : '▸ 명령 보기', plain: true, dimColor: !rich, onPress: () => { state.showCommand = !state.showCommand }, children: rich ? [Text({ key: 'm', color: FIXED.dim, children: state.showCommand ? '▾ 명령 접기' : '▸ 명령 보기' })] : undefined }),
-      rich ? (boxed ? termBox : null) : boxed ? Box({ key: 'cmdbox', flexDirection: 'column', gap: 1, backgroundColor: 'userMessageBackground', borderStyle: 'round', borderColor: 'inactive', paddingX: 1, children: [...factRows, Text({ key: 'cmd', mono: true, wrap: 'wrap', children: cmd })] }) : null,
+      unknown ? null : Button({ key: 'cmdtoggle', label: state.showCommand ? '▾ 명령 접기' : '▸ 명령 보기', plain: true, dimColor: true, onPress: () => { state.showCommand = !state.showCommand } }),
+      boxed ? Box({ key: 'cmdbox', flexDirection: 'column', gap: 1, backgroundColor: 'userMessageBackground', borderStyle: 'round', borderColor: 'inactive', paddingX: 1, children: [...factRows, Text({ key: 'cmd', mono: true, wrap: 'wrap', children: cmd })] }) : null,
       buttons,
-      rich ? waitRich : wait,
+      wait,
       ] }),
     ],
   })

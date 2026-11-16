@@ -18,7 +18,7 @@
     {
       "name": "relay-skills",
       "source": "./plugins/relay-skills",
-      "description": "Skills: /handoff(증거 기반 인계 요약), /confirm-first(큰 작업 전 해석 재확인).",
+      "description": "Skills: /handoff(증거 기반 인계 문서 HANDOFF.md).",
       "version": "0.1.0",
       "category": "skill"
     },
