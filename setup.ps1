@@ -17,7 +17,8 @@ $main = Join-Path $Target 'CLAUDE.md'
 $import = '@CLAUDE.shared.md'
 # The source computer's CLAUDE.md IS the shared rules. Importing a copy there loads every rule twice.
 # shortcut: detects the source copy by its first line only. Use a marker file if a local CLAUDE.md ever starts with the same title.
-if ((Test-Path $main) -and ((Get-Content $main -TotalCount 1) -eq (Get-Content (Join-Path $src 'CLAUDE.md') -TotalCount 1))) {
+$isSource = (Test-Path $main) -and ((Get-Content $main -TotalCount 1) -eq (Get-Content (Join-Path $src 'CLAUDE.md') -TotalCount 1))
+if ($isSource) {
     Write-Host "$main is the source copy. Skipped CLAUDE.shared.md and the import line."
 } else {
     Copy-Item (Join-Path $src 'CLAUDE.md') (Join-Path $Target 'CLAUDE.shared.md') -Force
@@ -27,8 +28,13 @@ if ((Test-Path $main) -and ((Get-Content $main -TotalCount 1) -eq (Get-Content (
     }
 }
 
-foreach ($d in 'docs', 'agents', 'skills', 'hooks') {
-    Copy-Item (Join-Path $src $d) $Target -Recurse -Force
+# The source computer edits ~/.claude directly (README 4-1). Copying here would overwrite edits not yet pushed, with no backup.
+if ($isSource) {
+    Write-Warning "Source computer: skipped copying docs, agents, skills, hooks. Copy them into this repo before you push."
+} else {
+    foreach ($d in 'docs', 'agents', 'skills', 'hooks') {
+        Copy-Item (Join-Path $src $d) $Target -Recurse -Force
+    }
 }
 # decision-rack moved into the session-board plugin (mods/). Copy does not delete, so remove the old copy.
 $old = Join-Path $Target 'skills\decision-rack'

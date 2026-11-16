@@ -345,10 +345,19 @@ async function goTo($: any, r: Rec) {
   if (link !== null) await $.process.run(['rundll32', 'url.dll,FileProtocolHandler', link]).catch(() => undefined)
 }
 
+/**
+ * cmd 의 del 에 넘겨도 되는 Windows 경로를 돌려준다. cmd 특수 글자(& | ^ % ! < > ")가 들 수 있는 이름이나 경로면 null 이다.
+ * cmd 는 인자를 다시 해석해서, 이름에 & 가 있으면 그 뒤가 명령으로 실행된다. 지우는 두 곳(removeBroken, purge)이 이 검사를 같이 쓴다.
+ */
+export function delPath(folder: string, name: string): string | null {
+  const path = `${folder}/${name}`.replace(/\//g, '\\')
+  return /^[A-Za-z]:\\[\w .\-\\]+$/.test(path) && /^[\w.\-]+\.json$/.test(name) ? path : null
+}
+
 /** 읽지 못한 기록 파일을 지운다. $.fs 에 지우기가 없어 cmd 의 del 을 쓰고, 파일 이름이 안전한 글자일 때만 지운다. shortcut: Windows 전용. */
 async function removeBroken($: any, name: string) {
-  const path = `${dir}/${name}`.replace(/\//g, '\\')
-  if (/^[A-Za-z]:\\[\w .\-\\]+$/.test(path) && /^[\w.\-]+\.json$/.test(name)) await $.process.run(['cmd', '/c', 'del', '/q', path]).catch(() => undefined)
+  const path = delPath(dir, name)
+  if (path !== null) await $.process.run(['cmd', '/c', 'del', '/q', path]).catch(() => undefined)
   parsedFiles.delete(name)
   await refresh($)
   $.ui.invalidate('ui.render')
@@ -361,7 +370,12 @@ async function purge($: any, now: number) {
       const p = `${dir}/${f.name}`
       const rec = await $.fs.read(p).then(parseRec, () => null)
       if (!purgeable(rec, now - f.mtimeMs, PURGE_MS, PURGE_OPEN_MS)) continue
-      await $.process.run(/^[A-Za-z]:/.test(p) ? ['cmd', '/c', 'del', '/q', p.replaceAll('/', '\\')] : ['rm', '-f', p])
+      if (!/^[A-Za-z]:/.test(p)) {
+        await $.process.run(['rm', '-f', p]) // rm 은 셸을 거치지 않아 이름을 검사하지 않아도 된다
+        continue
+      }
+      const path = delPath(dir, f.name)
+      if (path !== null) await $.process.run(['cmd', '/c', 'del', '/q', path]) // 위험한 글자가 든 이름은 지우지 않는다
     }
   } catch {
     // 지우지 못해도 STALE_MS 로 숨겨지니 괜찮다
