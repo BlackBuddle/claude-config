@@ -331,7 +331,7 @@ function pressName($: any, r: Rec, isMe: boolean) {
 }
 
 /** 이름에 쓸 수 있는 폭(px). 패널 폭(글자 칸 수)에서 고양이·칸 테두리·여백 몫을 뺀다. 넓히면 제목이 더 보인다. */
-export const nameWidth = (cols: unknown): number => Math.max(70, (typeof cols === 'number' && cols > 0 ? cols : 40) * 8 - 110)
+export const nameWidth = (cols: unknown): number => Math.max(70, (typeof cols === 'number' && cols > 0 ? cols : 40) * 8 - 130)
 
 /** 칸을 연 상태를 바꾼다. 같은 줄을 다시 누르면 접는다. */
 function toggle($: any, id: string) {
@@ -612,7 +612,7 @@ function sessionCard($: any, t: any, r: Rec, g: Mood, now: number, isMe: boolean
     gap: 'sm',
     children: [
       // 이미지 크기를 고정한다: 크기를 안 주면 패널을 넓힐 때 이미지가 폭에 맞춰 끝없이 커진다
-      Box({ key: 'avb', flexShrink: 0, children: [Svg({ key: 'av', source: avatarSvg(g), alt: `${SKIN[g].alt} 고양이`, width: 28, height: 28 })] }),
+      Box({ key: 'avb', flexShrink: 0, children: [Svg({ key: 'av', source: avatarSvg(g), alt: `${SKIN[g].alt} 고양이`, width: 48, height: 48 })] }),
       Box({
         key: 'mid',
         flexDirection: 'column',

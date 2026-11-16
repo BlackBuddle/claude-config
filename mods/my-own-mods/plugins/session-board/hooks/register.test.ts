@@ -527,10 +527,10 @@ test('펼칠 것이 없는 줄(진행 중·쉬는 중)은 이름을 누르면 �
 })
 
 test('이름 폭은 패널 폭을 따라 넓어지고, 상태 글자는 오른쪽 끝에 맞춘다', () => {
-  expect(nameWidth(40)).toBe(210) // 이름은 머리글 아래 줄을 혼자 쓴다
-  expect(nameWidth(60)).toBe(370)
+  expect(nameWidth(40)).toBe(190) // 이름은 머리글 아래 줄을 혼자 쓴다
+  expect(nameWidth(60)).toBe(350)
   expect(nameWidth(10)).toBe(70) // 아주 좁아도 이름 자리는 남긴다
-  expect(nameWidth(undefined)).toBe(210)
+  expect(nameWidth(undefined)).toBe(190)
 })
 
 test('패널을 닫으면 입력창 위에 여는 단추가 생기고, 누르면 패널이 열리며 단추가 사라진다. 아래 띠는 가리지 않는다', async ($, on) => {

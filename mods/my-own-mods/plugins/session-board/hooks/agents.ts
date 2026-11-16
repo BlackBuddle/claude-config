@@ -16,6 +16,10 @@ const PANE_ID = 'session-board'
 const FRAME_MS = 250
 const LIST_EVERY = 20 // 프레임 20개마다(5초) 목록을 다시 읽는다
 const KEEP = 20 // shortcut: 끝난 에이전트는 최근 20개만 남긴다
+const HIDE_MS = 5 * 60 * 1000 // 끝난 지 5분이 지난 에이전트는 패널에 그리지 않는다 (2026-11-16 사용자 결정)
+
+/** 패널에 그릴 에이전트인가. 지우지 않고 숨긴다: 목록 읽기(syncList)가 지운 에이전트를 다시 넣기 때문이다. */
+export const isShown = (endedAt: number | null, now: number): boolean => endedAt === null || now - endedAt < HIDE_MS
 // 24칸 도트를 정확히 2배로 그린다. 36px(1.5배)는 선 굵기가 고르지 않고 표정이 뭉개졌다.
 const CAT_PX = 48
 
@@ -344,11 +348,11 @@ export const register: Register = on => {
   // 세션 보드(아래 모듈)를 먼저 그리고 그 아래에 하위 에이전트 묶음을 붙인다. 에이전트가 없으면 세션 보드만이다
   on('ui.render', { component: 'Pane', requestId: PANE_ID }, async ($, e, next) => {
     const board: any = await next(e)
-    const all = [...agents.values()]
+    const now = Date.now()
+    const all = [...agents.values()].filter(a => isShown(a.endedAt, now))
     if (all.length === 0) return board
     const t = $.ui.resolve(e) as any
     const { Box, Text } = t
-    const now = Date.now()
     const anyLive = all.some(a => isLive(a.status))
     // 실행 중을 위에, 그 안에서는 늦게 시작한 것부터. 끝난 것은 늦게 끝난 것부터
     const ordered = [...all.filter(a => isLive(a.status)).sort((a, b) => b.startedAt - a.startedAt), ...all.filter(a => !isLive(a.status)).sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0))]
