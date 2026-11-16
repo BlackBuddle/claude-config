@@ -40,9 +40,6 @@ let turnStartedAt = 0
 let lastTurnSec: number | null = null
 let lastAnswerAt = 0
 let children = 0
-// 사용자를 기다리는 세션 수(결재·알림·확인). session-board 모드의 기록 폴더를 읽어 센다
-const NO_ASKS = { request: 0, notice: 0, report: 0 }
-let asks = NO_ASKS
 let context: { percent: number; tokens: number; window: number } | null = null
 let costUsd: number | null = null
 let week: { percent: number; resetsAt?: string } | null = null
@@ -220,65 +217,7 @@ async function tick($: any) {
   } catch {
     // 목록을 못 읽으면 이전 값을 둔다
   }
-  await readBoard($)
   $.ui.invalidate('ui.render')
-}
-
-const BOARD_STALE_MS = 90_000 // session-board 와 같은 값: 이보다 오래 기록이 없으면 끝난 세션이다
-
-/**
- * session-board 의 기록 파일들에서 사용자를 기다리는 칸을 센다. 진행 중인 칸(이미 답함)과 끝난 세션은 세지 않는다.
- * shortcut: session-board 의 판정(asks.ts countAsks)을 여기에 다시 썼다. 모드끼리 코드를 나눌 수 없어서다. 한쪽을 고치면 다른 쪽도 고친다.
- * 시험(register.test.ts)이 같은 기록으로 두 판정의 개수가 같은지 비교한다.
- */
-export function countBoard(texts: string[], now: number): { request: number; notice: number; report: number } {
-  const n = { request: 0, notice: 0, report: 0 }
-  for (const text of texts) {
-    let r: any
-    try {
-      r = JSON.parse(text)
-    } catch {
-      continue
-    }
-    if (!r || r.state === 'ended' || !Number.isFinite(r.updatedAt) || now - r.updatedAt > BOARD_STALE_MS) continue
-    const ask = r.ask && (r.ask.kind === 'request' || r.ask.kind === 'notice') && r.ask.at > (r.askClosedAt ?? 0) ? r.ask : null
-    const hasReport = r.report && Array.isArray(r.report.lines) && r.report.lines.length > 0 && r.report.at > (r.reportClosedAt ?? 0)
-    if (ask && r.state !== 'running') n[ask.kind as 'request' | 'notice'] += 1
-    else if (r.state === 'waiting') n.notice += 1
-    else if (hasReport) n.report += 1
-  }
-  return n
-}
-
-const boardFiles = new Map<string, { mtimeMs: number; size: number; text: string }>()
-
-async function readBoard($: any) {
-  try {
-    const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
-    if (!home) return
-    const dir = `${home}/.claude/session-board`
-    const files = (await $.fs.list(dir)).filter((f: any) => f.kind === 'file' && f.name.endsWith('.json'))
-    const texts: string[] = await Promise.all(
-      files.map(async (f: any) => {
-        // 수정 시각과 크기가 같으면 다시 읽지 않는다: 띠는 5초마다 세고, 세션마다 이 일을 한다
-        const cached = boardFiles.get(f.name)
-        if (cached && cached.mtimeMs === f.mtimeMs && cached.size === f.size) return cached.text
-        const text = await $.fs.read(`${dir}/${f.name}`).then((t: unknown) => (typeof t === 'string' ? t : ''), () => '')
-        boardFiles.set(f.name, { mtimeMs: f.mtimeMs, size: f.size, text })
-        return text
-      }),
-    )
-    for (const name of [...boardFiles.keys()]) if (!files.some((f: any) => f.name === name)) boardFiles.delete(name) // 지워진 파일은 잊는다
-    asks = countBoard(texts, Date.now())
-  } catch {
-    asks = NO_ASKS // 폴더가 없으면 칸이 없다
-  }
-}
-
-/** 띠에 쓸 글: "결재 1 · 알림 2". 0인 종류는 쓰지 않고, 칸이 없으면 null. */
-export function asksText(a: { request: number; notice: number; report: number }): string | null {
-  const parts = ([['결재', a.request], ['알림', a.notice], ['확인', a.report]] as const).filter(([, n]) => n > 0).map(([label, n]) => `${label} ${n}`)
-  return parts.length > 0 ? parts.join(' · ') : null
 }
 
 function applyUsage(u: any) {
@@ -344,11 +283,6 @@ function buildSegs(now: number, isWorking: boolean): Seg[] {
   if (verifying) segs.push({ prio: 1, value: '● 검증 중…', level: 'info' })
   else if (verify) segs.push({ prio: 1, value: verify.text, level: verify.state === 'ok' ? 'ok' : verify.state === 'fail' ? 'err' : 'warn' })
 
-  const waiting = asksText(asks)
-  if (waiting) {
-    const level: Level = asks.request > 0 ? 'err' : asks.notice > 0 ? 'warn' : 'ok'
-    segs.push({ prio: 0, value: mark(level, waiting), level })
-  }
 
   segs.push({ prio: 2, label: '하위', value: String(children), level: children > 0 ? 'info' : 'mute' })
 
@@ -451,7 +385,6 @@ type Tone = 'ok' | 'info' | 'warn' | 'err' | 'mute'
 type Rich = {
   verify: { tone: Tone; text: string } | null
   children: number
-  asks?: { request: number; notice: number; report: number } // 사용자를 기다리는 세션 수. 없으면 칸을 그리지 않는다
   context: { percent: number; tokens: number; window: number } | null
   week: { percent: number; mark: number | null; today: string | null; todayTone: Tone; reset: string | null; weight: number; recommended: number | null; pace: number | null } | null
   turn: { text: string; live: boolean } | null
@@ -503,7 +436,7 @@ export function bandSvg(d: Rich, maxW: number): { svg: string; w: number; hidden
   const H = 32 // 얇게 잡고 Z 배로 키워 그린다: 높이는 약 36px, 글씨는 12% 커진다(시안은 52px 에 글씨가 작았다)
   const Z = 1.12
   const cy = 16
-  // extra: false 이면 오류가 아닌 검증 칸과 구름 아이콘도 숨긴다 (결재·알림 칸이 들어와 띠가 넓어졌을 때의 마지막 단계)
+  // extra: false 이면 오류가 아닌 검증 칸과 구름 아이콘도 숨긴다 (좁은 창의 마지막 단계)
   const build = (show: { children: boolean; turn: boolean; today: boolean; extra?: boolean }) => {
     const items: { w: number; draw: (x: number) => string }[] = []
     // 알약은 경고·오류만(눈에 띄어야 하는 것). 나머지는 글자만 둬서 차분하게 보인다.
@@ -513,13 +446,6 @@ export function bandSvg(d: Rich, maxW: number): { svg: string; w: number; hidden
       items.push({ w, draw: x => `${pill ? `<rect x="${x}" y="${cy - 11}" width="${w}" height="22" rx="11" fill="${toneOf(tone).bg}"/>` : ''}${rs(runs, x + (pill ? 9 : 1), cy + 4, 12)}` })
     }
     if (d.verify && (show.extra !== false || d.verify.tone === 'err')) chip([{ t: d.verify.text, fill: toneOf(d.verify.tone).fg, weight: 700 }], d.verify.tone)
-    // 사용자를 기다리는 세션: 결재는 빨강, 알림은 호박색 알약, 확인은 초록 글자. 칸이 있을 때만이고 좁아도 숨기지 않는다
-    if (d.asks) {
-      const one = (label: string, n: number, tone: Tone, fill: string) => n > 0 && chip([{ t: `${label} `, fill, weight: 700 }, { t: String(n), fill, weight: 700, mono: true }], tone)
-      one('결재', d.asks.request, 'err', B.roseText)
-      one('알림', d.asks.notice, 'warn', B.amberText)
-      one('확인', d.asks.report, 'ok', B.ok)
-    }
     if (d.context) {
       const c = d.context
       const label: Run[] = [{ t: '컨텍스트', fill: B.dim }]
@@ -659,9 +585,8 @@ function richData(now: number, isWorking: boolean): Rich {
   const left = lastAnswerAt > 0 ? CACHE_MINUTES - Math.floor((now - lastAnswerAt) / 60_000) : null
   const cacheTone: Tone = left === null ? 'mute' : left <= 10 ? 'err' : left <= 20 ? 'warn' : 'mute'
   // 밴드 고양이: 일하는 중이면 달리고, 알릴 일(컨텍스트 75%↑, 캐시 경고, 검증 실패)이 있으면 깃발을 들고, 아니면 존다
-  const alert = (context?.percent ?? 0) >= 75 || (!isWorking && (cacheTone === 'err' || cacheTone === 'warn')) || verify?.state === 'fail' || asks.request + asks.notice > 0
+  const alert = (context?.percent ?? 0) >= 75 || (!isWorking && (cacheTone === 'err' || cacheTone === 'warn')) || verify?.state === 'fail'
   return {
-    asks,
     verify: verifying ? { tone: 'info', text: '● 검증 중…' } : verify ? { tone: verify.state === 'ok' ? 'ok' : verify.state === 'fail' ? 'err' : 'warn', text: verify.text } : null,
     children,
     context,

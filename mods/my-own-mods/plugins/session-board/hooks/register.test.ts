@@ -584,6 +584,43 @@ test('패널을 닫으면 입력창 위에 여는 단추가 생기고, 누르면
   await ui.unmount()
 })
 
+test('기다리는 칸이 있으면 띠에 "● 결재 1" 같은 단추가 패널이 열려 있어도 보이고, 누르면 패널을 연다', async ($, on) => {
+  const seen = fakeBoard(on, { 'a.json': file('a', { ask: OPEN_ASK('request') }), 'n.json': file('n', { ask: OPEN_ASK('notice') }), 'r.json': file('r', { state: 'running' }) })
+  on('ui.render', { component: 'AbovePrompt' }, ($: any, e: any) => $.ui.resolve(e).Text({ children: '아래 띠' }))
+  await $.session.start(START)
+  const ui = await $.ui.mount({ plugin: 'session-board', component: 'AbovePrompt', props: { hasSurvey: false, bodyColumns: 80, isWorking: false }, surface: 'desktop' } as any)
+  expect(await ui.find({ type: 'Button', text: /결재 1/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Button', text: /알림 1/ })).toBeTruthy()
+  expect(await ui.find({ key: 'open-report' })).toBeFalsy() // 0인 종류는 쓰지 않는다
+  expect(await ui.find({ key: 'open-board' })).toBeFalsy() // 개수 단추가 있으면 "세션 ▸" 는 없다
+  const opens = seen.opens
+  await ui.press({ key: 'open-notice' })
+  expect(seen.opens).toBe(opens + 1)
+  await ui.unmount()
+})
+
+test('한 창: 하위 에이전트가 생기면 세션 보드 아래에 에이전트 칸이 붙고, 없으면 세션 보드만이다', async ($, on) => {
+  const seen = fakeBoard(on, {})
+  on('agent.spawn', () => ({ agentId: 'a1', model: 'x' }) as any)
+  await $.session.start(START)
+  let ui = await mount($)
+  expect(await ui.find({ type: 'Text', text: /하위 에이전트/ })).toBeFalsy()
+  await ui.unmount()
+
+  const opens = seen.opens
+  await $.agent.spawn({ tool_use_id: 't1', prompt: 'p', description: '코드 탐색', subagentType: 'Explore' } as any)
+  expect(seen.opens).toBe(opens + 1) // 첫 에이전트가 시작하면 패널을 연다
+  await $.tool.call({ tool: 'Grep', agentId: 'a1' } as any)
+  await $.tool.call({ tool: 'Read', agentId: 'a1' } as any)
+  ui = await mount($)
+  expect((await ui.find({ type: 'Text', text: /● 쉬는 중/ }))?.text).toBeDefined() // 위: 세션 보드
+  expect((await ui.find({ type: 'Text', text: /^하위 에이전트 1 · 호출 2회$/ }))?.text).toBeDefined() // 아래: 에이전트 묶음
+  expect((await ui.find({ type: 'Text', text: /● 실행 중/ }))?.text).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^코드 탐색$/ }))?.text).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /Explore · 호출 2회 · Read/ }))?.text).toBeDefined()
+  await ui.unmount()
+})
+
 // 한 창(세션 보드 아래의 확인 카드)은 시험 도구로 그릴 수 없다: 도구 호출이 붙잡혀 있는 동안 패널 그리기가 그 호출을 기다린다. 앱에서 확인한다
 
 // ---- 검토 고침 -------------------------------------------------------------------------

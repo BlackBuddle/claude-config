@@ -1,12 +1,14 @@
-// agent-panel: 하위 에이전트를 옆 패널에 두 줄씩 보여 준다. 실행 중 / 확인 필요 / 완료로 묶는다.
-//   윗줄: 표정 이름 시간 / 아랫줄: 상태 유형 호출수 마지막도구
-// Svg 요소가 있는 화면(데스크톱 등)에서는 행마다 우주비행사 고양이를 그리고, 없는 화면(터미널)은 글자 얼굴을 쓴다.
+// agent-panel: 하위 에이전트를 세션 보드 패널 아래에 칸 하나씩 보여 준다. 실행 중인 것이 위다.
+//   칸: 고양이 | ● 상태 · 시간 / 이름 / 유형 · 호출 수 · 마지막 도구
+// Svg 요소가 있는 화면(데스크톱 등)에서는 칸마다 우주비행사 고양이를 그리고, 없는 화면(터미널)은 글자 얼굴을 쓴다.
 // 패널을 못 그리는 좁은 창에서는 아무것도 그리지 않는다(relay-band 의 "하위 N" 칸이 대신한다).
 // 호스트가 소스에서 on(...) 과 $.noun.method(...) 를 읽으므로 literal 로 쓰고, $ 를 받는 도우미는 최상위 함수로 둔다.
+// 세션 보드 플러그인의 모듈이다. 오른쪽 패널을 하나로 쓰려고 옮겼다 (2026-11-16 사용자 결정)
 
 import type { Register } from 'claude-code'
 
-const PANE_ID = 'agent-panel'
+// 세션 보드와 같은 패널을 쓴다
+const PANE_ID = 'session-board'
 // 고양이 프레임 간격. 설계는 140ms 였지만 갱신 비용을 아직 못 재서 250ms 로 시작한다. 부드러우면 줄이고, 버거우면 늘린다.
 const FRAME_MS = 250
 const LIST_EVERY = 20 // 프레임 20개마다(5초) 목록을 다시 읽는다
@@ -28,7 +30,6 @@ type A = {
 const agents = new Map<string, A>()
 let frame = 0
 let ticker: { cancel: () => void } | null = null
-let isOpen = false
 let autoOpened = false
 
 // 유형마다 표정 순서가 다르다. 한 글자(한 코드포인트)이고 동아시아 모호 폭이 아닌 글자만 쓴다(ö ô õ o).
@@ -50,15 +51,6 @@ const LABEL: Record<string, string> = {
   killed: '중단',
 }
 const isLive = (status: string) => status === 'running' || status === 'pending'
-const GROUP_BG: Record<string, string> = { live: 'suggestion', check: 'error', done: 'success' }
-
-// 묶음: 실행 중 / 확인 필요(실패·중단) / 완료(그 밖의 끝난 것).
-const GROUPS = [
-  { key: 'live', title: '실행 중' },
-  { key: 'check', title: '확인 필요' },
-  { key: 'done', title: '완료' },
-] as const
-export const groupOf = (status: string): 'live' | 'check' | 'done' => (isLive(status) ? 'live' : status === 'failed' || status === 'killed' ? 'check' : 'done')
 // 상태는 기호(윗줄)와 단어(아랫줄)와 색, 세 가지로 말한다. 테마 색 이름을 쓴다.
 const COLOR: Record<string, string> = { running: 'suggestion', pending: 'suggestion', completed: 'success', failed: 'error', killed: 'warning' }
 export function fmtTime(sec: number): string {
@@ -307,26 +299,24 @@ export function catState(status: string): CatState {
   return isLive(status) ? 'run' : status === 'completed' ? 'done' : status === 'failed' || status === 'killed' ? 'fail' : 'idle'
 }
 
+/** 고양이를 움직이는 타이머를 건다. 세션 보드의 session.start 가 부른다(한 모듈은 같은 이벤트를 조건 없이 두 번 걸 수 없다). */
+export function startAgentTicker($: any) {
+  ticker?.cancel()
+  ticker = $.clock.every(FRAME_MS, () => step($))
+}
+
+/** 하위 에이전트의 도구 호출만 센다. 호출은 막지도 바꾸지도 않는다. 세션 보드의 tool.call 이 부른다. */
+export function countAgentCall(e: any) {
+  const id = e.agentId as string | undefined
+  const a = id ? agents.get(id) : undefined
+  // 하위 에이전트가 결과를 돌려주는 내부 호출은 작업으로 세지 않는다.
+  if (a && e.tool !== 'SubagentHandback') {
+    a.calls += 1
+    a.lastTool = String(e.tool ?? '-')
+  }
+}
+
 export const register: Register = on => {
-  on('session.start', async ($, e, next) => {
-    const result = await next(e)
-    await $.command.register({ name: 'agent_panel', description: '하위 에이전트 패널을 열거나 닫습니다' })
-    ticker?.cancel()
-    ticker = $.clock.every(FRAME_MS, () => step($))
-    return result
-  })
-
-  on('command.run', { command: 'agent_panel' }, async $ => {
-    if (isOpen) {
-      await $.ui.close({ id: PANE_ID })
-      isOpen = false
-      return { text: '에이전트 패널을 닫았습니다.' }
-    }
-    const opened = await $.ui.open({ id: PANE_ID, title: '에이전트' })
-    isOpen = opened.isPlaced
-    return { text: opened.isPlaced ? '에이전트 패널을 열었습니다.' : '이 화면에는 패널을 놓을 자리가 없습니다. 입력창 위 띠의 "하위" 칸을 보세요.' }
-  })
-
   on('agent.spawn', async ($, e, next) => {
     const result: any = await next(e)
     if (result?.agentId) {
@@ -340,156 +330,86 @@ export const register: Register = on => {
         calls: 0,
         lastTool: '-',
       })
+      // 첫 하위 에이전트가 시작하면 세션 보드 패널을 한 번 연다. 이미 열려 있으면 그대로다
       if (!autoOpened) {
         autoOpened = true
-        const opened = await $.ui.open({ id: PANE_ID, title: '에이전트' })
-        isOpen = opened.isPlaced
-        // 패널을 못 놓는 창이면 어디서 보는지 한 번만 알린다.
-        if (!opened.isPlaced) $.ui.toast('이 화면에는 에이전트 패널을 놓을 자리가 없습니다. 입력창 위 띠의 "하위" 칸으로 확인하세요.')
+        await $.ui.open({ id: PANE_ID, title: '세션' })
       }
       $.ui.invalidate('ui.render')
     }
     return result
   })
 
-  // 하위 에이전트의 도구 호출만 센다. 호출은 막지도 바꾸지도 않는다.
-  on('tool.call', async ($, e, next) => {
-    const id = (e as any).agentId as string | undefined
-    const a = id ? agents.get(id) : undefined
-    // 하위 에이전트가 결과를 돌려주는 내부 호출은 작업으로 세지 않는다.
-    if (a && (e as any).tool !== 'SubagentHandback') {
-      a.calls += 1
-      a.lastTool = String((e as any).tool ?? '-')
-    }
-    return next(e)
-  })
-
-  on('ui.render', { component: 'Pane', requestId: PANE_ID }, ($, e, next) => {
-    const { Box, Text, Svg } = $.ui.resolve(e) as any
+  // 세션 보드(아래 모듈)를 먼저 그리고 그 아래에 하위 에이전트 묶음을 붙인다. 에이전트가 없으면 세션 보드만이다
+  on('ui.render', { component: 'Pane', requestId: PANE_ID }, async ($, e, next) => {
+    const board: any = await next(e)
     const all = [...agents.values()]
-    if (all.length === 0) {
-      return Box({
-        flexDirection: 'column',
-        children: [
-          Text({ key: 'empty', dimColor: true, children: '실행한 하위 에이전트가 없습니다.' }),
-          Text({ key: 'hint', dimColor: true, children: '에이전트를 시작하면 여기에 나타납니다. 닫으려면 /agent_panel 을 입력하세요.' }),
-        ],
-      })
-    }
+    if (all.length === 0) return board
+    const t = $.ui.resolve(e) as any
+    const { Box, Text } = t
     const now = Date.now()
     const anyLive = all.some(a => isLive(a.status))
-    const total = `합계 ${all.length}개 · 호출 ${all.reduce((n, a) => n + a.calls, 0)}회`
-    // 시안: 약 760px 이상으로 넓게 펼치면 두 줄 대신 표(이름·유형·상태·시간·호출·마지막)로 그린다.
-    if (((e as any).props?.bodyColumns ?? 0) >= WIDE_COLUMNS) {
-      const ordered = [...all.filter(a => isLive(a.status)).sort((a, b) => b.startedAt - a.startedAt), ...all.filter(a => !isLive(a.status)).sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0))]
-      return Box({
-        flexDirection: 'column',
-        children: [tableHead(Box, Text), ...ordered.map(a => tableRow(Box, Text, a, now)), Text({ key: 'total', dimColor: true, children: total })],
-      })
-    }
-    const body: any[] = []
-    for (const g of GROUPS) {
-      // 실행 중은 시작이 늦은 것부터, 끝난 것은 늦게 끝난 것부터.
-      const rows = all
-        .filter(a => groupOf(a.status) === g.key)
-        .sort((a, b) => (g.key === 'live' ? b.startedAt - a.startedAt : (b.endedAt ?? 0) - (a.endedAt ?? 0)))
-      if (rows.length === 0) continue
-      body.push(
-        Box({
-          key: `g-${g.key}`,
-          flexDirection: 'column',
-          gap: 1, // 카드 테두리끼리 맞닿지 않게 한 줄 띄운다
-          marginTop: body.length > 0 ? 1 : 0,
-          // 묶음 머리글은 색 알약. 상자로 감싸서 알약이 줄 끝까지 늘어나지 않게 한다.
-          children: [
-            Box({ key: 'h', children: [Text({ bold: true, color: 'inverseText', backgroundColor: GROUP_BG[g.key], children: ` ${g.title} · ${rows.length} ` })] }),
-            ...rows.map(a => row(Box, Text, Svg, a, now, anyLive)),
-          ],
-        }),
-      )
-    }
-    body.push(Text({ key: 'total', dimColor: true, children: total }))
-    return Box({ flexDirection: 'column', children: body })
+    // 실행 중을 위에, 그 안에서는 늦게 시작한 것부터. 끝난 것은 늦게 끝난 것부터
+    const ordered = [...all.filter(a => isLive(a.status)).sort((a, b) => b.startedAt - a.startedAt), ...all.filter(a => !isLive(a.status)).sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0))]
+    const section = Box({
+      key: 'agents',
+      flexDirection: 'column',
+      gap: 'xs',
+      children: [
+        Text({ key: 'h', dimColor: true, size: 'caption', weight: 'semibold', children: `하위 에이전트 ${all.length} · 호출 ${all.reduce((n, a) => n + a.calls, 0)}회` }),
+        ...ordered.map(a => agentSlot(t, a, now, anyLive)),
+      ],
+    })
+    return Box({ flexDirection: 'column', gap: 'md', children: [Box({ key: 'board', flexDirection: 'column', children: [board] }), section] })
   })
 }
 
-// 넓은 패널의 표. 칸 너비는 글자 칸 수(한글 2칸).
-const WIDE_COLUMNS = 95
-const COLS = { type: 16, status: 8, time: 8, calls: 7, last: 12 }
-
-function tableHead(Box: any, Text: any) {
-  const cell = (key: string, width: number | undefined, label: string) => Box({ key, width, flexGrow: width === undefined ? 1 : 0, flexShrink: 0, children: [Text({ dimColor: true, children: label })] })
-  return Box({
-    key: 'head',
-    gap: 1,
-    children: [cell('n', undefined, '이름'), cell('t', COLS.type, '유형'), cell('s', COLS.status, '상태'), cell('m', COLS.time, '시간'), cell('c', COLS.calls, '호출'), cell('l', COLS.last, '마지막')],
-  })
-}
-
-function tableRow(Box: any, Text: any, a: A, now: number) {
-  const mark = isLive(a.status) ? '●' : a.status === 'completed' ? '✓' : a.status === 'failed' ? '✗' : '·'
-  const color = COLOR[a.status]
+/**
+ * 에이전트 하나의 칸(결재함 틀, 세션 보드 칸과 같은 모양): 고양이 | 머리글(● 상태 · 시간) 위, 이름 가운데, 유형·호출 아래.
+ * 색은 테마의 뜻 색이다. Svg 가 없는 화면(터미널)은 고양이 대신 글자 얼굴을 머리글 앞에 둔다.
+ */
+function agentSlot(t: any, a: A, now: number, animate: boolean) {
+  const { Box, Text, Svg } = t
   const time = fmtTime(Math.max(0, Math.round(((a.endedAt ?? now) - a.startedAt) / 1000)))
-  const dim = (key: string, width: number, text: string) => Box({ key, width, flexShrink: 0, children: [Text({ dimColor: true, wrap: 'truncate-end', children: text })] })
-  return Box({
-    key: a.id,
-    gap: 1,
-    children: [
-      Box({ key: 'n', flexGrow: 1, flexShrink: 1, children: [Text({ wrap: 'truncate-end', children: [Text({ key: 'm', color, bold: true, children: `${mark} ` }), Text({ key: 'v', color: a.status === 'failed' ? 'error' : undefined, weight: 'medium', children: a.name })] })] }),
-      dim('t', COLS.type, a.type || '-'),
-      Box({ key: 's', width: COLS.status, flexShrink: 0, children: [Text({ color, bold: true, children: LABEL[a.status] ?? a.status })] }),
-      dim('m', COLS.time, time),
-      dim('c', COLS.calls, `${a.calls}회`),
-      dim('l', COLS.last, a.lastTool),
-    ],
-  })
-}
-
-// 두 줄: 윗줄은 표정·이름·시간, 아랫줄은 상태·유형·호출. 좁으면 이름과 아랫줄 뒤쪽이 줄어든다.
-// Svg 가 있으면 왼쪽에 고양이를 놓고 윗줄의 표정 자리는 상태 기호로 쓴다.
-function row(Box: any, Text: any, Svg: any, a: A, now: number, animate: boolean) {
   const set = FRAMES[a.type] ?? DEFAULT_FRAMES
-  const face = isLive(a.status) ? (Svg ? '●' : set[Math.floor(frame / 2) % set.length]) : a.status === 'completed' ? '✓' : a.status === 'failed' ? '✗' : '·'
-  const color = COLOR[a.status]
-  const time = fmtTime(Math.max(0, Math.round(((a.endedAt ?? now) - a.startedAt) / 1000)))
+  const face = Svg ? '●' : isLive(a.status) ? set[Math.floor(frame / 2) % set.length] : a.status === 'completed' ? '✓' : a.status === 'failed' ? '✗' : '·'
   const text = Box({
     key: 'text',
     flexDirection: 'column',
+    flexGrow: 1,
     flexShrink: 1,
+    minWidth: 0,
     children: [
       Box({
-        key: 'top',
-        justifyContent: 'space-between',
-        gap: 1,
+        key: 'head',
+        flexDirection: 'row',
+        gap: 'sm',
         children: [
-          // 실패한 에이전트는 이름도 오류 색으로, 그 밖에는 보통 색(끝났어도 흐리게 하지 않는다).
-          Box({ key: 'l', flexShrink: 1, children: [Text({ wrap: 'truncate-end', children: [Text({ key: 'm', color, bold: true, children: `${face} ` }), Text({ key: 'n', color: a.status === 'failed' ? 'error' : undefined, weight: 'medium', children: a.name })] })] }),
-          Box({ key: 'r', flexShrink: 0, children: [Text({ dimColor: true, children: time })] }),
+          Text({ key: 'st', color: COLOR[a.status], size: 'caption', weight: 'semibold', children: `${face} ${LABEL[a.status] ?? a.status}` }),
+          Text({ key: 'tm', size: 'caption', dimColor: true, children: time }),
         ],
       }),
-      Text({
-        key: 'sub',
-        wrap: 'truncate-end',
-        // 상태는 색 알약(기호·단어·색 세 가지로 말한다). 알약 바탕은 상태 색, 대기처럼 색이 없는 상태는 회색.
-        children: [Text({ key: 's', color: 'inverseText', backgroundColor: color ?? 'inactive', bold: true, children: ` ${LABEL[a.status] ?? a.status} ` }), Text({ key: 'd', dimColor: true, children: ` ${a.type || '-'}` })],
-      }),
-      // 좁은 패널에서 한 줄에 다 담으면 "호출 0 / 회" 처럼 꺾인다. 고양이(48px)가 글자 세 줄 높이라 줄을 나눈다.
-      Text({ key: 'calls', dimColor: true, wrap: 'truncate-end', children: a.calls === 0 ? '호출 없음' : `호출 ${a.calls}회 · ${a.lastTool}` }),
+      // 실패한 에이전트는 이름도 오류 색으로 쓴다
+      Text({ key: 'nm', color: a.status === 'failed' ? 'error' : undefined, wrap: 'truncate-end', children: a.name }),
+      Text({ key: 'sub', size: 'caption', dimColor: true, wrap: 'truncate-end', children: `${a.type || '-'} · ${a.calls === 0 ? '호출 없음' : `호출 ${a.calls}회 · ${a.lastTool}`}` }),
     ],
   })
-  // 에이전트마다 카드 하나. 테두리 색이 상태를 한 번 더 말한다.
-  const card = { borderStyle: 'round', borderColor: color ?? 'inactive', paddingX: 1 }
-  if (!Svg) return Box({ key: a.id, flexDirection: 'column', ...card, children: [text] })
   const st = catState(a.status)
   // 움직임은 실행 중인 에이전트가 있을 때만 갱신된다. 아무도 일하지 않으면 정해진 한 프레임으로 멈춘다. 대기는 절반 속도.
   const f = animate ? (st === 'idle' ? Math.floor(frame / 2) : frame) : 1
   const kind = FRAMES[a.type] ? a.type : 'default'
+  const cat = Svg ? Box({ key: 'cat', flexShrink: 0, children: [Svg({ source: catSvg(st, f, kind), alt: `우주비행사 고양이 (${LABEL[a.status] ?? a.status})`, width: CAT_PX, height: CAT_PX })] }) : null
   return Box({
     key: a.id,
-    gap: 1,
-    ...card,
-    alignItems: 'center', // 고양이가 글자 두 줄보다 커서, 글자를 고양이 가운데에 맞춘다
-    children: [Box({ key: 'cat', flexShrink: 0, children: [Svg({ source: catSvg(st, f, kind), alt: `우주비행사 고양이 (${LABEL[a.status] ?? a.status})`, width: CAT_PX, height: CAT_PX })] }), text],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 'sm',
+    borderStyle: 'single',
+    borderColor: 'subtle',
+    borderDimColor: true,
+    paddingX: 'md',
+    paddingY: 'sm',
+    children: [cat, text],
   })
 }
 

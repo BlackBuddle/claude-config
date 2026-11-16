@@ -9,8 +9,9 @@ import type { Register } from 'claude-code'
 
 import { C, KIND_LABEL, SKIN, avatarSvg, barSvg, clip, fmtDur, headOf } from './art'
 import type { Mood } from './art'
-import { APP_ID_FORMAT, closable, deadLabel, purgeable, groupOf, isDead, isNestedSession, judge, openAsk, openReport, optionsLine, orphanIds, parseAsk, parseReport } from './asks'
+import { APP_ID_FORMAT, closable, countAsks, deadLabel, purgeable, groupOf, isDead, isNestedSession, judge, openAsk, openReport, optionsLine, orphanIds, parseAsk, parseReport } from './asks'
 import type { Ask, Group, Report } from './asks'
+import { countAgentCall, register as registerAgents, startAgentTicker } from './agents'
 import { register as registerGuard } from './guard'
 import { cardAsk, lastTurn, signalsOf } from './signals'
 import type { Signals } from './signals'
@@ -28,6 +29,12 @@ const MAX_BACKGROUND_LINES = 2 // 펴진 칸의 배경은 이 줄 수까지만 �
 const USER_ORIGINS = new Set(['composer', 'bridge', 'sdk'])
 // 사용자가 끝낸 세션만 결재·알림을 닫는다. 앱 종료(other)와 이어받기(resume)는 칸을 남기고 "세션 끝남"으로 보인다
 const CLOSING_ENDS = new Set(['prompt_input_exit', 'clear', 'logout'])
+// 입력창 위 띠의 개수 단추: 급한 순서, 테마의 뜻 색
+const BAND_KINDS = [
+  { key: 'request', label: '결재', color: 'error' },
+  { key: 'notice', label: '알림', color: 'warning' },
+  { key: 'report', label: '확인', color: 'success' },
+] as const
 
 export type State = 'running' | 'waiting' | 'idle' | 'ended'
 export type Rec = {
@@ -389,8 +396,11 @@ async function onTick($: any) {
 export const register: Register = (on, options) => {
   // 확인 패널(edit-guard)을 먼저 건다: 그 패널 훅이 바깥에서 세션 보드를 감싸 아래에 카드를 붙인다. 플러그인 1개는 모듈 1개만 등록할 수 있다
   registerGuard(on, options)
+  // 하위 에이전트 묶음도 같은 패널에 붙인다. 순서: 가드(맨 바깥, 카드는 맨 아래) → 에이전트 → 세션 보드(맨 위)
+  registerAgents(on, options)
   on('session.start', async ($, e, next) => {
     const result = await next(e)
+    startAgentTicker($) // 하위 에이전트 칸의 고양이 움직임
     const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
     dir = home ? `${home}/.claude/session-board` : ''
     const cwd = await $.session.cwd()
@@ -456,15 +466,25 @@ export const register: Register = (on, options) => {
   // 패널이 닫혀 있을 때만 입력창 위 띠 맨 끝에 여는 단추를 둔다. 열려 있으면 아무것도 그리지 않는다
   // 별도 띠를 두지 않기로 했지만(인계 문서), 닫힌 패널을 여는 길이 명령뿐이라 이 경우만 연다 (2026-11-16 사용자 결정)
   // 띠는 한 자리라서 아래 플러그인의 띠를 먼저 받아 함께 그린다 (relay-band 와 같은 방식)
+  // 사용자를 기다리는 칸이 있으면 "● 결재 1 · ● 알림 1" 단추를 그리고, 누르면 패널을 연다 (relay-band 의 개수 칸을 옮겨 왔다: 그 칸은 그림이라 누를 수 없었다)
+  // 기다리는 칸이 없으면 패널이 닫혀 있을 때만 "세션 ▸" 단추를 그린다
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const props: any = (e as any).props ?? {}
-    if (props.hasSurvey || isOpen) return next(e)
+    const counts = countAsks(board, Date.now())
+    const kinds = BAND_KINDS.filter(k => counts[k.key] > 0)
+    if (props.hasSurvey || (kinds.length === 0 && isOpen)) return next(e)
     const beneath: any = await next(e)
-    const { Box, Button } = $.ui.resolve(e) as any
+    const { Box, Text, Button } = $.ui.resolve(e) as any
+    // 앱이 단추 안 글자색을 지운다. 그래서 색 점은 단추 밖의 글자로 둔다 (결재함과 같은 방법)
+    const items = kinds.map(k =>
+      Box({ key: `count-${k.key}`, flexDirection: 'row', alignItems: 'center', children: [Text({ key: 'd', color: k.color, children: '●' }), Button({ key: `open-${k.key}`, label: `${k.label} ${counts[k.key]}`, plain: true, onPress: () => openPane($) })] }),
+    )
     const mine = Box({
       key: 'session-board-open',
       flexDirection: 'row',
-      children: [Box({ key: 'fl', flexGrow: 1 }), Button({ key: 'open-board', label: '세션 ▸', plain: true, onPress: () => openPane($) })],
+      alignItems: 'center',
+      gap: 'sm',
+      children: [...items, Box({ key: 'fl', flexGrow: 1 }), kinds.length === 0 ? Button({ key: 'open-board', label: '세션 ▸', plain: true, onPress: () => openPane($) }) : null],
     })
     return beneath ? Box({ flexDirection: 'column', children: [Box({ key: 'beneath', flexDirection: 'column', children: [beneath] }), mine] }) : mine
   })
@@ -514,6 +534,7 @@ export const register: Register = (on, options) => {
   })
 
   on('tool.call', async ($, e, next) => {
+    countAgentCall(e) // 하위 에이전트 칸의 호출 수
     if (e.agentId !== undefined) return next(e)
     if (e.tool === 'TodoWrite') {
       // CLI 의 작업 목록: 호출마다 목록 전체가 온다

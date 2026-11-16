@@ -60,79 +60,22 @@ test('패널을 못 놓는 창은 한 줄 구성으로 그린다', () => {
   expect(json).not.toContain('▸ 명령 보기') // 접기 버튼과 목록은 없다
 })
 
-// Svg 를 그릴 수 있는 화면(데스크톱)은 시안 7번(흰 카드)대로 그린다. 없는 화면은 위의 글자 디자인 시험이 지킨다.
+// 데스크톱도 글자 디자인과 같은 앱 기본 부품으로 그린다: 세션 보드 칸과 같은 결재함 틀이다 (B안)
 const fakeSvg = { ...fake, Svg: (p: any) => p }
-// 카드는 Svg 이미지 조각이라 글자는 조각 안에 있다. 조각의 source 만 모아서 본다.
-const sources = (node: any): string[] => (Array.isArray(node) ? node.flatMap(sources) : node && typeof node === 'object' ? [...(typeof node.source === 'string' ? [node.source] : []), ...Object.values(node).flatMap(sources)] : [])
-const cardSvg = (state: any) => sources(draw(fakeSvg, state as any)).join('\n')
 
-test('데스크톱 경고 카드는 시안 7번의 알약·원인·명령 블록·카운트다운을 그린다', () => {
-  const unknown = { summary: '지울 대상을 확인하지 못했습니다', lines: [], unknown: true, recover: [['mute', '파일이 없다는 뜻이 아닙니다.']], facts: [['원인', '변수 $D 를 풀지 못했습니다']] }
-  const svg = cardSvg(held(unknown, { command: 'rm -rf "$D"', leftMs: 582_000 }))
-  expect(svg).toContain('영향 범위 모름') // 호박 알약
-  expect(svg).toContain('fill="#FEF3C7"')
-  expect(svg).toContain('지울 대상을') // 폭이 좁아 제목은 두 줄로 나뉠 수 있다
-  expect(svg).toContain('못했습니다')
-  expect(svg).toContain('원인')
-  expect(svg).toMatch(/fill="#92400E" font-family="[^"]*" font-weight="400">\$D</) // 풀지 못한 변수는 코드 글씨
-  expect(svg).toContain('rx="10" fill="#14172B"') // 어두운 명령 블록
-  expect(svg).toMatch(/fill="#FB7185" font-family="[^"]*" font-weight="700" text-decoration="underline">rm -rf</) // 위험 명령: 로즈 굵게 밑줄
-  expect(svg).toContain('>9:42</tspan>')
-  expect(svg).toContain('> 남음</tspan>')
-  expect(svg).toMatch(/height="3" rx="1.5" fill="#14172B"/) // 30초 넘게 남으면 검정 단색 막대
-  expect(svg).not.toContain('linearGradient') // 그라데이션은 쓰지 않는다
-  expect(svg.match(/stroke-linejoin/g)?.length).toBe(1) // 경고 아이콘은 위쪽 알약에 하나뿐
-  expect(svg).not.toContain('fill="#F43F5E" rx') // 로즈 단색 막대는 마지막 30초에만
-})
-
-test('버튼은 호스트 버튼이고 단축키 1·2 와 순서를 지킨다', () => {
-  const json = JSON.stringify(draw(fakeSvg, held({ summary: '파일 2개 삭제', lines: [] }) as any))
+test('데스크톱 확인 카드는 세션 보드 칸과 같은 틀이다: 얇은 칸, ● 머리글, 테마 뜻 색, 그림 없음', () => {
+  const card: any = draw(fakeSvg, held({ summary: '파일 2개 삭제', lines: [] }) as any)
+  expect(card).toMatchObject({ borderStyle: 'single', borderColor: 'subtle', paddingX: 'md', paddingY: 'sm' })
+  const json = JSON.stringify(card)
+  expect(json).toMatch(/"color":"error"[^}]*"children":"● 삭제 확인"/)
+  expect(json).not.toContain('"source"') // 고정 색 그림(SVG)은 쓰지 않는다: 어두운 테마를 따라간다
+  expect(json).not.toContain('#') // 색은 모두 테마 이름이다
+  expect(json).toContain('"weight":"semibold"') // 제목은 크지 않은 굵은 글
+  expect(json).not.toContain('"size":"title"')
   expect(json.indexOf('"label":"취소"')).toBeLessThan(json.indexOf('"label":"진행"'))
-  expect(json).toContain('"label":"취소","hotkey":"1"')
-  expect(json).toContain('"label":"진행","hotkey":"2"')
-  // 버튼은 호스트 기본 모양 그대로다(색 칩은 그려지지 않는다). 카드 테두리는 얇은 단색이다.
-  expect(json).toContain('"label":"취소","hotkey":"1","autoFocus":true}') // 취소·진행에는 variant 도 칩도 없다
-  expect(json).toContain('"label":"진행","hotkey":"2"}')
-  expect(json).not.toContain('"paddingLeft":"xs"')
-  expect(json).toContain('"borderColor":"#F6D58A"')
-  // 왼쪽 4px 세로 막대는 이미지 조각 안에 그린다
-  expect(cardSvg(held({ summary: '파일 2개 삭제', lines: [] }))).toContain('<rect x="0" y="0" width="4"')
-})
-
-test('마지막 30초는 카운트다운이 로즈 단색으로 바뀐다', () => {
-  const report = { summary: '파일 2개 삭제', lines: [] }
-  const svg = cardSvg(held(report, { leftMs: 20_000 }))
-  expect(svg).toContain('>0:20</tspan>')
-  expect(svg).toContain('fill="#BE123C" font-family="\'JetBrains Mono\'') // 시간 글씨도 로즈
-  expect(svg).toMatch(/height="3" rx="1.5" fill="#F43F5E"/)
-  expect(cardSvg(held(report, { leftMs: 582_000 }))).not.toMatch(/height="3" rx="1.5" fill="#F43F5E"/)
-})
-
-test('세 줄을 넘는 명령은 접고 더 보기로 펼치며, 접어도 위험 명령은 가려지지 않는다', () => {
-  const cmd = Array.from({ length: 6 }, (_, i) => `echo ${i}`).join('\n')
-  const unknown = { summary: '지울 대상을 확인하지 못했습니다', lines: [], unknown: true }
-  const folded = held(unknown, { command: cmd })
-  expect(cardSvg(folded)).not.toContain('echo 5')
-  expect(JSON.stringify(draw(fakeSvg, folded as any))).toContain('"label":"더 보기 ▾"')
-  const open = held(unknown, { command: cmd, expand: true })
-  expect(cardSvg(open)).toContain('echo 5')
-  expect(JSON.stringify(draw(fakeSvg, open as any))).toContain('"label":"접기 ▴"')
-  // 위험 명령이 접힌 뒤쪽에 있어도 그 줄이 보인다
-  const far = `${Array.from({ length: 5 }, (_, i) => `echo line${i}`).join('\n')}\nrm -rf build`
-  expect(cardSvg(held(unknown, { command: far }))).toContain('rm -rf')
-})
-
-test('파일 삭제 확인 카드는 복구 경고·위치·파일 목록을 그리고 명령은 접혀 있다', () => {
-  const report = { summary: '파일 2개 · 2.0 KB 삭제', lines: ['/proj/a.txt', 'b.txt'], recover: [['warn', '⚠ 휴지통을 거치지 않습니다 · git 에 올려 둔 파일이면 되살릴 수 있습니다']] }
-  const state = held(report, { command: 'rm -rf build' })
-  const svg = cardSvg(state)
-  expect(svg).toContain('삭제 확인')
-  expect(svg).toContain('휴지통을 거치지 않습니다')
-  expect(svg).toContain('되살릴') // 보조 문구는 폭에 따라 줄이 나뉜다
-  expect(svg).toContain('위치')
-  expect(svg).toContain('a.txt')
-  expect(svg).not.toContain('rm -rf build') // 접힌 명령은 그리지 않는다(위쪽 이름표의 rm -rf 는 따로)
-  expect(JSON.stringify(draw(fakeSvg, state as any))).toContain('"label":"▸ 명령 보기"')
+  const unknown = JSON.stringify(draw(fakeSvg, held({ summary: '모름', lines: [], unknown: true }) as any))
+  expect(unknown).toContain('● 영향 범위 모름') // 모름은 흐린 글자로, 안전으로 읽히지 않게 글로 쓴다
+  expect(unknown).not.toMatch(/"color":"error"[^}]*"children":"● 영향/)
 })
 
 test('좁은 창에서도 영향을 모르면 명령 첫 줄을 보인다', () => {

@@ -959,9 +959,9 @@ function drawRich(t: any, state: Held) {
 // 시안의 읽는 순서: 영향(큰 글씨) → 복구 → 위치 → 목록 → 명령 → 버튼 → 남은 시간.
 // 명령은 접어 두고, 영향을 모를 때만 처음부터 펼친다. compact 는 패널을 못 놓는 창(입력창 위)용 한 줄 구성이다.
 export function draw(t: any, state: Held, compact = false, surface = 'desktop') {
-  // 데스크톱 카드는 시안 수치대로 그린다(drawRich). 터미널과 입력창 위 띠는 아래의 글자 디자인을 쓴다.
-  // 터미널에서는 Svg 가 있어도 그려지지 않을 수 있어 화면 종류로도 가른다.
-  if (!compact && surface !== 'terminal' && typeof t.Svg === 'function') return drawRich(t, state)
+  // 데스크톱·터미널 모두 앱 기본 부품으로 그린다: 세션 보드 칸과 같은 결재함 틀(얇은 칸, ● 머리글, 테마 뜻 색)이다 (2026-11-16 사용자 결정 B안)
+  // 입력창 위 띠(compact)는 한 줄 구성이다
+  void surface
   const { Box, Text, Button, Svg } = t
   const rich = false // 아래는 글자 디자인 전용이다. rich 분기는 drawRich 로 옮겨 가서 더는 타지 않는다.
   // 데스크톱 카드는 다크 고정이라 글자 색을 직접 칠한다(앱이 라이트 테마여도 읽히게). 터미널은 테마 색을 그대로 쓴다.
@@ -1000,7 +1000,7 @@ export function draw(t: any, state: Held, compact = false, surface = 'desktop') 
           Button({ key: 'proceed', label: proceedLabel, hotkey: '2', variant: 'secondary', onPress: decide('proceed') }),
         ],
   })
-  const wait = Text({ key: 'wait', dimColor: true, children: `Claude 가 기다리는 중 · ${clock(state.leftMs)} 남음` })
+  const wait = Text({ key: 'wait', dimColor: true, size: 'caption', children: `Claude 가 기다리는 중 · ${clock(state.leftMs)} 남음` })
   const title = unknown ? '? 영향 범위 모름' : `⚠ ${TITLE[state.risk.kind] ?? state.risk.label}`
   const titleColor = unknown ? 'inactive' : 'warning'
   // 모름은 빨강(위험 단정)이 아니라 평범한 글자색으로 그린다.
@@ -1018,7 +1018,8 @@ export function draw(t: any, state: Held, compact = false, surface = 'desktop') 
           Text({ key: 'x', bold: true, color: FIXED.ink, children: unknown ? '영향 범위 모름' : (TITLE[state.risk.kind] ?? state.risk.label) }),
         ],
       })
-    : Text({ key: 't', bold: true, color: 'inverseText', backgroundColor: titleColor, children: ` ${title} ` })
+    : // 세션 보드 머리글과 같은 모양: 색 점 + 작은 글자. 위험은 빨강(error), 모름은 흐린 글자(안전으로 읽히지 않게 "모름"을 글로 쓴다)
+      Text({ key: 't', color: unknown ? undefined : 'error', dimColor: unknown, size: 'caption', weight: 'semibold', children: `● ${unknown ? '영향 범위 모름' : (TITLE[state.risk.kind] ?? state.risk.label)}` })
   // 남은 시간은 글자 + 줄어드는 가는 막대. 마지막 30초는 로즈.
   const urgent = state.leftMs <= 30_000
   const waitRich = rich
@@ -1104,22 +1105,23 @@ export function draw(t: any, state: Held, compact = false, surface = 'desktop') 
       })
     : null
 
+  // 세션 보드 칸과 같은 틀: 얇은 테두리(subtle), 안쪽 여백 md·sm, 굵은 글은 제목 한 줄만
   return Box({
     flexDirection: 'column',
-    borderStyle: 'round',
-    borderColor: rich ? FIXED.danger : unknown ? 'inactive' : 'warning',
-    backgroundColor: rich ? FIXED.surface : undefined,
+    borderStyle: 'single',
+    borderColor: 'subtle',
+    borderDimColor: true,
+    paddingX: 'md',
+    paddingY: 'sm',
     children: [
-      rich ? Svg({ key: 'strip', source: strip(), alt: '위험 표시줄' }) : null,
-      Box({ key: 'in', flexDirection: 'column', gap: 1, paddingX: 1, children: [
+      Box({ key: 'in', flexDirection: 'column', gap: 1, children: [
       Box({
         key: 'hd',
         justifyContent: 'space-between',
         gap: 1,
-        // 제목은 색 알약으로: 경고는 노랑, 모름은 회색 바탕에 글자를 뒤집어 그린다.
-        children: [pill, T({ key: 'chip', mono: true, wrap: 'truncate-end', color: rich ? FIXED.danger : undefined, dimColor: !rich, bold: rich, children: state.risk.label })],
+        children: [pill, T({ key: 'chip', mono: true, size: 'caption', wrap: 'truncate-end', dimColor: true, children: state.risk.label })],
       }),
-      T({ key: 'hero', size: 'title', weight: 'bold', color: rich ? undefined : heroColor, wrap: 'wrap', children: report.summary }),
+      T({ key: 'hero', weight: 'semibold', wrap: 'wrap', children: report.summary }),
       ...(report.recover ?? []).map(([lv, text], i) => T({ key: `rec${i}`, color: rich ? RECOVER_RICH[lv] : RECOVER_COLOR[lv], dimColor: !rich && lv === 'mute', wrap: 'wrap', children: text })),
       // 시안 C(모름)에는 위치 줄이 없다. 영향을 잰 폴더는 잰 뒤에만 의미가 있다.
       unknown ? null : Box({ key: 'where', flexDirection: 'column', children: [T({ key: 'k', dimColor: true, children: '위치' }), T({ key: 'v', mono: true, wrap: 'truncate-middle', children: state.cwd })] }),
