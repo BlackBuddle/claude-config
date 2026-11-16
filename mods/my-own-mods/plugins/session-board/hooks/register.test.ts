@@ -227,10 +227,8 @@ test('앱(SDK) 세션처럼 isInteractive 가 false 여도 패널을 열고, 명
   expect([opens, closes]).toEqual([2, 1])
 })
 
-test('세션을 열면 패널이 같이 열리고, 접기를 누르면 좁은 너비로 다시 열어 요약 알약만 그린다', async ($, on) => {
+test('세션을 열면 패널이 같이 열리고, 접기 단추는 없다 (개수는 입력창 위 띠가 보인다)', async ($, on) => {
   const opens: any[] = []
-  let closes = 0
-  const stored: any[] = []
   const waiting = JSON.stringify(rec({ id: 'w', name: '대기 중', state: 'waiting', waitFor: '답변', since: Date.now(), updatedAt: Date.now() }))
   on('env.get', () => ({ value: 'C:/home' }))
   on('session.cwd', () => ({ value: 'C:/work/p' }))
@@ -239,17 +237,9 @@ test('세션을 열면 패널이 같이 열리고, 접기를 누르면 좁은 �
   on('clock.every', () => ({ value: {} }) as any)
   on('command.register', () => ({ value: { command: 'session_board' } }))
   on('store.get', () => ({ value: undefined }))
-  on('store.set', (_, e: any) => {
-    stored.push(e.value)
-    return { value: undefined } as any
-  })
   on('ui.open', (_, e: any) => {
     opens.push(e)
     return { value: { isPlaced: true } }
-  })
-  on('ui.close', () => {
-    closes += 1
-    return { value: undefined } as any
   })
   on('fs.write', () => ({ value: undefined }) as any)
   on('fs.list', () => ({ value: [{ name: 'w.json', kind: 'file', size: 1, mtimeMs: Date.now(), isLink: false }] }) as any)
@@ -258,26 +248,13 @@ test('세션을 열면 패널이 같이 열리고, 접기를 누르면 좁은 �
 
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   expect(opens.length).toBe(1)
-  expect(opens[0].columns).toBe(40) // 펼친 상태는 줄 하나가 들어가는 너비를 바란다(상한은 걸 수 없다)
+  expect(opens[0].columns).toBe(40) // 줄 하나가 들어가는 너비를 바란다(상한은 걸 수 없다)
 
   const props = { title: '세션', isFocused: false, bodyColumns: 60, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} }
   const ui = await $.ui.mount({ plugin: 'session-board', component: 'Pane', requestId: 'session-board', props, surface: 'desktop' } as any)
   expect(await ui.find({ type: 'Svg' })).toBeTruthy() // 펼친 데스크톱 패널은 카드 이미지
   expect((await ui.find({ type: 'Text', text: /세션 \d+개/ }))?.text).toBeDefined()
-
-  await ui.press({ key: 'fold-btn' })
-  expect(closes).toBe(1)
-  expect(opens.length).toBe(2)
-  expect(opens[1].columns).toBe(16)
-  expect(stored).toEqual([true])
-  // 접으면 묶음 카드 대신 개수 알약만 남는다
-  expect((await ui.find({ type: 'Text', text: /알림 1/ }))?.text).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /대기 중/ })).toBeUndefined()
-
-  // 펼치기: 다시 기본 너비
-  await ui.press({ key: 'fold-btn' })
-  expect(opens[2].columns).toBe(40)
-  expect(stored).toEqual([true, false])
+  expect(await ui.find({ key: 'fold-btn' })).toBeFalsy() // 접기 단추는 없다
   await ui.unmount()
 })
 
