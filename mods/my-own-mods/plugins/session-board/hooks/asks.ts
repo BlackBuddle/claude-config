@@ -1,6 +1,7 @@
 // 사용자를 기다리는 칸(결재·알림·확인)의 판정. 입출력이 없는 순수 함수만 둔다.
 // 결재함(decision-rack)의 units.ts 에서 옮겨 세션 기록 하나(state + ask + report)에 맞췄다.
 
+import { strings } from './signals'
 import type { Signals } from './signals'
 
 export const STALE_MS = 90_000 // 90초 넘게 기록이 없으면 죽은 세션으로 본다
@@ -21,9 +22,6 @@ export type Watch = Marks & { state: Phase; updatedAt: number }
 
 // 급한 순서. 이 순서로 묶고 이 순서로 보인다
 export type Group = 'request' | 'notice' | 'report' | 'running' | 'idle' | 'hidden'
-export const GROUP_ORDER = ['request', 'notice', 'report', 'running', 'idle'] as const
-
-const strings = (raw: unknown): string[] => (Array.isArray(raw) ? raw.filter((s): s is string => typeof s === 'string') : [])
 
 export function clipQuestion(text: string): string {
   return text.length > MAX_QUESTION_CHARS ? `${text.slice(0, MAX_QUESTION_CHARS)}…` : text
