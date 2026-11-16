@@ -1,19 +1,27 @@
 import { expect, test } from 'claude-code/testing'
 
-import { askPillSvg, asksText, bandCatSvg, bandSvg, barsOf, dailyBudget, detailRows, fit, gauge, panelSvg } from './band'
+import { askPillSvg, asksText, bandCatSvg, bandSvg, barsOf, dailyBudget, detailRows, fit, gauge, panelSvg, runVerify } from './band'
 
 // 시안 3번과 같은 상태: 컨텍스트 31%, 주 15%(오늘 7/19%p), 턴 11초
 const sample: any = {
   verify: { tone: 'ok', text: '✓ 검증 2' },
   children: 0,
   context: { percent: 31, tokens: 311020, window: 1000000 },
-  week: { percent: 15, mark: 27, today: '7/19%p', todayTone: 'mute', reset: '11/18 06:00', weight: 0.3, recommended: 19, pace: -6 },
-  turn: { text: '11초', live: false },
-  cache: { tone: 'mute', alert: null, clock: '18:12', since: '마지막 답변 + 60분 · 11/12' },
+  week: { percent: 15, mark: 27, today: '7/19%p', todayTone: 'mute', reset: '11/18 06:00', recommended: 19, pace: -6 },
+  turn: { text: '11초' },
+  cache: { tone: 'mute', alert: null },
   history: [12, 20, 31],
-  lastTurn: '9초',
-  lastVerify: '없음',
 }
+
+test('검증: 성공·실패·도구 없음을 나누고, Python Store 별칭(9009)은 실패가 아니라 다음 후보로 넘어간다', async () => {
+  // argv 첫 낱말 → 종료 코드. 없으면 실행 파일이 없는 것(예외)
+  const fake = (codes: Record<string, number>) => ({ process: { run: async (argv: string[]) => { if (!(argv[0] in codes)) throw new Error('ENOENT'); return { exitCode: codes[argv[0]], stdout: '', stderr: '' } } } })
+  expect(await runVerify(fake({ python: 0 }), ['a.py'])).toEqual({ state: 'ok', text: '✓ 검증 1' })
+  expect(await runVerify(fake({ python: 1 }), ['a.py'])).toEqual({ state: 'fail', text: '✗ 검증 실패: a.py' })
+  expect(await runVerify(fake({ python: 9009 }), ['a.py'])).toEqual({ state: 'skip', text: '⚠ 검증 못함 (도구 없음)' })
+  expect(await runVerify(fake({ python: 9009, py: 0 }), ['a.py'])).toEqual({ state: 'ok', text: '✓ 검증 1' })
+  expect(await runVerify(fake({}), ['a.md'])).toBeNull() // 검사 대상이 아닌 파일은 말하지 않는다
+})
 
 test('밴드는 폭이 좁아지면 하위 → 턴 → 오늘 권장 순으로 숨기고 게이지는 끝까지 남긴다', () => {
   const full = bandSvg(sample, 2000)
@@ -53,7 +61,7 @@ test('상세는 채팅창 위 자리에 들어가도록 낮고, 카드는 흰 �
 })
 
 test('숫자용 글꼴 조각 안의 한글은 sans 글꼴로 나눠 그린다(Consolas 에는 한글이 없다)', () => {
-  const { svg } = bandSvg({ ...sample, turn: { text: '1분 04초', live: false } }, 2000)
+  const { svg } = bandSvg({ ...sample, turn: { text: '1분 04초' } }, 2000)
   expect(svg).toMatch(/font-family="'JetBrains Mono',Consolas,monospace"[^>]*>1<\/tspan><tspan[^>]*font-family="'Noto Sans KR'[^>]*>분<\/tspan>/)
   expect(svg).not.toMatch(/monospace"[^>]*>[^<]*[가-힣]/) // 고정폭 글꼴 조각에는 한글이 없다
 })

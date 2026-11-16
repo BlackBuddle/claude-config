@@ -13,7 +13,7 @@ Claude Code 개인 설정 묶음. 다른 컴퓨터에 같은 환경을 만든다
 | `mods/my-own-mods/` | 내가 만든 모드·스킬·에이전트 모음 3개. session-board(오른쪽 패널, 입력창 위 띠, 위험 명령 확인 카드, 하위 에이전트, 결재함), relay-skills(`/handoff`), relay-agents(설계·구현·리뷰 에이전트). 결재함 규칙: `docs/통합_작업방식.md` 11절. 자세한 설명은 `mods/my-own-mods/README.md` |
 | `skills/design-clash/` | 로컬 스킬. 디자인 스킬 3개로 시안 3개를 따로 만들고 선택기에서 비교한다. 명령: `/design-clash` |
 | `hooks/reminder.txt` | 알림 훅의 문구. 메시지마다 Claude에게 규칙 4개를 알린다 |
-| `plugins-backup/` | 플러그인 본체의 사본 (`ponytail`, `egm`, `frontend-design`). 백업용이다. 설치는 명령으로 한다 |
+| `plugins-backup/` | 플러그인 본체의 사본 (`ponytail`, `egm`, `frontend-design`). 백업용이다. 설치는 명령으로 한다. 설치된 판보다 낡을 수 있다 |
 | `setup.ps1` | 설치 스크립트 |
 
 ## 2. 새 컴퓨터에 설치한다 (처음 1번)
@@ -43,8 +43,8 @@ gh repo clone Dawnilove/claude-config "$env:USERPROFILE\claude-config"; powershe
 | 1 | 공통 규칙을 `~/.claude/CLAUDE.shared.md`로 복사한다 | 그 컴퓨터의 `CLAUDE.md`를 덮어쓰지 않는다 |
 | 2 | 그 컴퓨터의 `CLAUDE.md` 끝에 `@CLAUDE.shared.md` 1줄을 추가한다 | 이미 있으면 추가하지 않는다 |
 | 3 | `docs`, `agents`, `skills`, `hooks`를 `~/.claude`에 복사한다 | 같은 이름의 파일은 덮어쓴다 |
-| 4 | `settings.json`에 알림 훅 1개와 `"language": "korean"`을 추가한다 | 다른 설정과 훅은 그대로 둔다. 언어 설정이 이미 있으면 그 값을 둔다. 고치기 전의 파일은 `settings.json.bak-setup`으로 남긴다 |
 | 3-1 | 구 `skills/decision-rack`이 있으면 지운다 | 결재함이 `session-board`로 옮겨졌다 |
+| 4 | `settings.json`에 알림 훅 1개와 `"language": "korean"`을 추가한다 | 다른 설정과 훅은 그대로 둔다. 언어 설정이 이미 있으면 그 값을 둔다. 고치기 전의 파일은 `settings.json.bak-setup`으로 남긴다 |
 | 5 | 플러그인 3개를 설치한다: `ponytail`, `frontend-design`, `egm` | 이미 있으면 건너뛴다 |
 | 6 | 사용자 환경 변수 `CLAUDE_CODE_PLUGIN_DIRS`를 저장소의 `mods\my-own-mods\plugins`로 정한다. 내 모드 3개(`session-board`, `relay-skills`, `relay-agents`)가 켜진다 | 다른 값이 이미 있으면 경고만 하고 그대로 둔다 |
 

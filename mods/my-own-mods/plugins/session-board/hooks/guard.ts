@@ -144,8 +144,9 @@ async function guard($: any, e: any, next: any, tool: 'Bash' | 'PowerShell') {
 
 // 훅 자신의 시간은 10초뿐이고 $.clock.sleep 도 그 안에서 센다. $ 호출 안에서 보낸 시간은 세지 않으므로
 // 프로세스를 띄워서 기다린다(blast-radius 가 sleep 프로세스를 쓰는 것과 같은 이유).
+// 여러 번 띄우므로 시작이 빠른 Git bash 를 먼저 쓴다. PowerShell 은 시작에만 수백 ms 의 CPU 를 쓴다
 async function pause($: any) {
-  for (const argv of [['powershell', '-NoProfile', '-Command', 'Start-Sleep -Milliseconds 700'], ['C:/Program Files/Git/bin/bash.exe', '-c', 'sleep 0.7']]) {
+  for (const argv of [['C:/Program Files/Git/bin/bash.exe', '-c', 'sleep 0.7'], ['powershell', '-NoProfile', '-Command', 'Start-Sleep -Milliseconds 700']]) {
     try {
       await $.process.run(argv, { timeoutMs: 5000 })
       return
@@ -495,7 +496,7 @@ async function measurePsRemove($: any, risk: Risk, cwd: string): Promise<Report>
   const [head, ...rest] = String(run.stdout).split(/\r?\n/).filter((l: string) => l !== '')
   const [files, bytes] = (head ?? '0 0').split(' ').map(Number)
   if (!files && hasVar(targets)) {
-    return { summary: '지울 대상을 확인하지 못했습니다', lines: [], unknown: true, recover: [NOT_NONE], facts: [['원인', `변수 ${varName(targets)} 를 풀지 못했습니다`], ['또는', 'bash 를 찾지 못했습니다']] }
+    return { summary: '지울 대상을 확인하지 못했습니다', lines: [], unknown: true, recover: [NOT_NONE], facts: [['원인', `변수 ${varName(targets)} 를 풀지 못했습니다`]] }
   }
   if (!files) return { summary: `지울 파일이 없음: ${targets.join(' ')}`, lines: [], note: '경로가 없거나 파일이 없는 폴더입니다.' }
   return {

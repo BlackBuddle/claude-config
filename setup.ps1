@@ -43,6 +43,7 @@ if (Test-Path $old) { Remove-Item $old -Recurse -Force; Write-Host "Removed old 
 # Register the reminder hook in settings.json. Other hooks and settings stay.
 $sp = Join-Path $Target 'settings.json'
 $s = if (Test-Path $sp) { Get-Content $sp -Raw -Encoding UTF8 | ConvertFrom-Json } else { New-Object psobject }
+if (-not $s) { $s = New-Object psobject }   # an empty settings.json gives $null
 $changed = $false
 # Response language. An existing value (any language) is kept.
 if (-not $s.language) {

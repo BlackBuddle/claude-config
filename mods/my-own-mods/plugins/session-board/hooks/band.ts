@@ -5,6 +5,8 @@
 
 import type { Register } from 'claude-code'
 
+import { CAT, fmtDur, isWide, tw } from './art'
+
 const DAY = 86_400_000
 // ponytail 줄의 안쪽 여백에 맞추는 들여쓰기 칸 수(데스크톱 화면만). 화면에서 보고 어긋나면 이 값만 바꾼다.
 const INDENT = 1
@@ -372,8 +374,8 @@ function buildSegs(now: number, isWorking: boolean): Seg[] {
     }
   }
 
-  if (isWorking && turnStartedAt > 0) segs.push({ prio: 5, label: '턴', value: fmt(Math.round((now - turnStartedAt) / 1000)), level: 'info' })
-  else if (lastTurnSec !== null) segs.push({ prio: 5, label: '턴', value: fmt(lastTurnSec), level: 'mute' })
+  if (isWorking && turnStartedAt > 0) segs.push({ prio: 5, label: '턴', value: fmtDur(now - turnStartedAt), level: 'info' })
+  else if (lastTurnSec !== null) segs.push({ prio: 5, label: '턴', value: fmtDur(lastTurnSec * 1000), level: 'mute' })
 
   if (costUsd !== null) segs.push({ prio: 6, value: `$${costUsd.toFixed(2)}` })
 
@@ -402,16 +404,15 @@ export function detailRows(now: number): [string, string][] {
     const d = new Date(ms)
     return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   }
-  const comma = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
   const join = (parts: (string | false)[]) => parts.filter(Boolean).join(' · ')
-  if (context) rows.push(['컨텍스트', join([`${comma(context.tokens)} / ${comma(context.window)} 토큰`, history.length > 0 && `${barsOf(history)} ${forecast(context.percent)}`])])
+  if (context) rows.push(['컨텍스트', join([`${commaN(context.tokens)} / ${commaN(context.window)} 토큰`, history.length > 0 && `${barsOf(history)} ${forecast(context.percent)}`])])
   // 띠에는 두지 않는 진단: 주간 한도 칸이 왜 없는지.
   if (!week && lastUsageAt > 0) rows.push(['주간', limitKinds.length > 0 ? `읽지 못함 (엔진이 준 종류: ${limitKinds.join(', ')})` : '엔진이 한도 값을 주지 않았습니다'])
   const reset = week?.resetsAt ? Date.parse(week.resetsAt) : NaN
   const b = week && dayBase ? dailyBudget(week.percent, dayBase.percent, week.resetsAt, now) : null
   const weekly = join([Number.isFinite(reset) && `${when(reset)} 리셋`, b !== null && `오늘 권장 ${b.recommended.toFixed(0)}%p (쉬는 날 ×${WEIGHT_WEEKEND})`, b !== null && `페이스 ${Math.round(b.pace)}%p (+ 빠름)`])
   if (weekly) rows.push(['주간', weekly])
-  const turn = join([lastTurnSec !== null && `마지막 턴 ${fmt(lastTurnSec)}`, lastAnswerAt > 0 && `캐시 만료 ${when(lastAnswerAt + CACHE_MINUTES * 60_000)}`])
+  const turn = join([lastTurnSec !== null && `마지막 턴 ${fmtDur(lastTurnSec * 1000)}`, lastAnswerAt > 0 && `캐시 만료 ${when(lastAnswerAt + CACHE_MINUTES * 60_000)}`])
   if (turn) rows.push(['턴·캐시', turn])
   rows.push(['상태', join([`검증 ${verify ? verify.text : '없음'}`, `하위 ${children}개 실행 중`])])
   if (history.length > 0) rows.push(['범례', '☀ 25% 미만 · ☁ 50% · ☂ 75% · ☇ 90% · ↯ 그 이상 (컨텍스트 사용률)'])
@@ -421,10 +422,6 @@ export function detailRows(now: number): [string, string][] {
 // 단일 폭 기호(이모지 아님): 글꼴이 달라도 줄이 맞는다.
 function forecast(p: number): string {
   return p < 25 ? '☀' : p < 50 ? '☁' : p < 75 ? '☂' : p < 90 ? '☇' : '↯'
-}
-
-function fmt(sec: number): string {
-  return sec < 60 ? `${sec}초` : `${Math.floor(sec / 60)}분 ${String(sec % 60).padStart(2, '0')}초`
 }
 
 /** 폭에 들어갈 때까지 번호가 가장 큰 칸부터 뺀다. 나머지는 원래 순서를 지킨다. */
@@ -453,12 +450,10 @@ type Rich = {
   verify: { tone: Tone; text: string } | null
   children: number
   context: { percent: number; tokens: number; window: number } | null
-  week: { percent: number; mark: number | null; today: string | null; todayTone: Tone; reset: string | null; weight: number; recommended: number | null; pace: number | null } | null
-  turn: { text: string; live: boolean } | null
-  cache: { tone: Tone; alert: string | null; clock: string; since: string } | null
+  week: { percent: number; mark: number | null; today: string | null; todayTone: Tone; reset: string | null; recommended: number | null; pace: number | null } | null
+  turn: { text: string } | null
+  cache: { tone: Tone; alert: string | null } | null
   history: number[]
-  lastTurn: string | null
-  lastVerify: string
   mood?: 'run' | 'flag' | 'zz' // 밴드 고양이: 일하는 중 / 알릴 일이 있음 / 쉬는 중
 }
 const B = {
@@ -468,8 +463,6 @@ const B = {
 }
 const SANS = "'Noto Sans KR','Malgun Gothic',system-ui,sans-serif"
 const MONO = "'JetBrains Mono',Consolas,monospace"
-const isWide = (ch: string) => /[ᄀ-ᇿ⺀-꓏가-힣豈-﫿＀-｠]/.test(ch)
-const tw = (s: string, size: number, mono = false, bold = false) => [...s].reduce((n, ch) => n + (isWide(ch) ? size : size * (mono ? 0.6 : 0.56)) * (bold && !mono ? 1.05 : 1), 0)
 const xml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 type Run = { t: string; fill: string; weight?: number; mono?: boolean }
 // Consolas 에는 한글이 없어 한글이 깨져 보이므로, 숫자용 글꼴 조각 안의 한글은 sans 로 나눠 그린다.
@@ -485,12 +478,6 @@ const levelFill = (p: number, dir: 'h' | 'd' = 'h') => (p < 25 ? B.cyan : p < 50
 const levelSolid = (p: number) => (p < 25 ? B.cyan : p < 50 ? B.accent : p < 75 ? B.amber : p < 90 ? B.orange : B.rose)
 const toneOf = (t: Tone) => (t === 'ok' ? { bg: B.okBg, fg: B.ok } : t === 'warn' ? { bg: B.amberBg, fg: B.amberText } : t === 'err' ? { bg: B.roseBg, fg: B.roseText } : t === 'info' ? { bg: B.infoBg, fg: B.infoText } : { bg: B.soft, fg: B.dim })
 const CLOUD = 'M7 18a4 4 0 0 1-.5-7.97A6 6 0 0 1 18 9.5a4.2 4.2 0 0 1-.5 8.5H7z'
-// 24x24 도트 고양이(agent-panel 에서 옮김): 달리는 / 깃발 든 / 조는. 같은 색 칸을 path 하나로 합쳐 줄였다.
-const CAT = {
-  run: '<symbol id="run" viewBox="0 0 24 24" shape-rendering="crispEdges"><path fill="#E5503F" d="M11 0h2v1h-2zM10 16h1v1h-1z"/><path fill="#CBCBC2" d="M11 1h2v1h-2zM8 18h8v1h-8z"/><path fill="#A9CBEA" d="M6 2h12v1h-12zM5 3h1v1h-1zM18 3h1v1h-1zM4 4h1v1h-1zM19 4h1v1h-1zM4 5h1v1h-1zM19 5h1v1h-1zM4 6h1v1h-1zM19 6h1v1h-1zM4 7h1v1h-1zM19 7h1v1h-1zM4 8h1v1h-1zM19 8h1v1h-1zM4 9h1v1h-1zM19 9h1v1h-1zM4 10h1v1h-1zM19 10h1v1h-1zM4 11h1v1h-1zM19 11h1v1h-1zM5 12h1v1h-1zM18 12h1v1h-1zM6 13h12v1h-12z"/><path fill="#F2994A" d="M6 3h1v1h-1zM17 3h1v1h-1zM5 4h1v1h-1zM7 4h3v1h-3zM11 4h1v1h-1zM13 4h1v1h-1zM15 4h4v1h-4zM6 5h4v1h-4zM11 5h3v1h-3zM15 5h4v1h-4zM6 6h13v1h-13zM5 7h3v1h-3zM10 7h4v1h-4zM16 7h3v1h-3zM5 8h3v1h-3zM10 8h4v1h-4zM16 8h3v1h-3zM5 9h3v1h-3zM10 9h4v1h-4zM16 9h3v1h-3zM5 10h1v1h-1zM7 10h2v1h-2zM15 10h2v1h-2zM18 10h1v1h-1zM5 11h1v1h-1zM7 11h2v1h-2zM15 11h2v1h-2zM18 11h1v1h-1zM6 12h3v1h-3zM15 12h3v1h-3zM5 17h1v1h-1zM5 18h3v1h-3z"/><path fill="#E3F0FB" d="M7 3h10v1h-10z"/><path fill="#FFD35A" d="M2 4h1v1h-1zM1 5h3v1h-3zM2 6h1v1h-1zM21 18h1v1h-1zM20 19h3v1h-3zM21 20h1v1h-1z"/><path fill="#FFFFFF" d="M6 4h1v1h-1zM5 5h1v1h-1zM5 6h1v1h-1zM8 7h1v1h-1zM14 7h1v1h-1z"/><path fill="#C9702A" d="M10 4h1v1h-1zM12 4h1v1h-1zM14 4h1v1h-1zM10 5h1v1h-1zM14 5h1v1h-1zM3 16h2v1h-2z"/><path fill="#2A2523" d="M9 7h1v1h-1zM15 7h1v1h-1zM8 8h2v1h-2zM14 8h2v1h-2zM8 9h2v1h-2zM14 9h2v1h-2zM10 11h1v1h-1zM13 11h1v1h-1zM11 12h2v1h-2z"/><path fill="#F29A9A" d="M6 10h1v1h-1zM11 10h2v1h-2zM17 10h1v1h-1zM6 11h1v1h-1zM17 11h1v1h-1z"/><path fill="#FFE3BD" d="M9 10h2v1h-2zM13 10h2v1h-2zM9 11h1v1h-1zM11 11h2v1h-2zM14 11h1v1h-1zM9 12h2v1h-2zM13 12h2v1h-2z"/><path fill="#4C8DE0" d="M6 14h12v1h-12zM13 16h1v1h-1zM6 17h1v1h-1zM17 17h1v1h-1zM8 21h3v1h-3zM13 21h3v1h-3z"/><path fill="#F4F4F0" d="M8 15h8v1h-8zM6 16h4v1h-4zM11 16h2v1h-2zM14 16h4v1h-4zM7 17h10v1h-10zM8 19h3v1h-3zM13 19h3v1h-3zM8 20h3v1h-3zM13 20h3v1h-3z"/></symbol>',
-  flag: '<symbol id="flag" viewBox="0 0 24 24" shape-rendering="crispEdges"><path fill="#CBCBC2" d="M11 0h2v1h-2zM8 17h8v1h-8z"/><path fill="#A9CBEA" d="M6 1h12v1h-12zM5 2h1v1h-1zM18 2h1v1h-1zM4 3h1v1h-1zM19 3h1v1h-1zM4 4h1v1h-1zM19 4h1v1h-1zM4 5h1v1h-1zM19 5h1v1h-1zM4 6h1v1h-1zM19 6h1v1h-1zM4 7h1v1h-1zM19 7h1v1h-1zM4 8h1v1h-1zM19 8h1v1h-1zM4 9h1v1h-1zM19 9h1v1h-1zM4 10h1v1h-1zM19 10h1v1h-1zM5 11h1v1h-1zM18 11h1v1h-1zM6 12h12v1h-12z"/><path fill="#F2994A" d="M6 2h1v1h-1zM17 2h1v1h-1zM5 3h1v1h-1zM7 3h3v1h-3zM11 3h1v1h-1zM13 3h1v1h-1zM15 3h4v1h-4zM6 4h4v1h-4zM11 4h3v1h-3zM15 4h4v1h-4zM6 5h13v1h-13zM5 6h14v1h-14zM5 7h4v1h-4zM10 7h5v1h-5zM16 7h3v1h-3zM5 8h3v1h-3zM9 8h1v1h-1zM11 8h3v1h-3zM15 8h1v1h-1zM17 8h2v1h-2zM5 9h1v1h-1zM7 9h2v1h-2zM15 9h2v1h-2zM18 9h1v1h-1zM5 10h1v1h-1zM7 10h2v1h-2zM15 10h2v1h-2zM18 10h1v1h-1zM6 11h3v1h-3zM15 11h3v1h-3zM5 14h1v1h-1zM5 15h1v1h-1zM6 17h2v1h-2z"/><path fill="#E3F0FB" d="M7 2h10v1h-10z"/><path fill="#2A2523" d="M21 2h1v1h-1zM21 3h1v1h-1zM21 4h1v1h-1zM21 5h1v1h-1zM21 6h1v1h-1zM9 7h1v1h-1zM15 7h1v1h-1zM21 7h1v1h-1zM8 8h1v1h-1zM10 8h1v1h-1zM14 8h1v1h-1zM16 8h1v1h-1zM21 8h1v1h-1zM21 9h1v1h-1zM10 10h4v1h-4zM21 10h1v1h-1zM10 11h1v1h-1zM13 11h1v1h-1zM21 11h1v1h-1zM21 12h1v1h-1zM21 13h1v1h-1zM21 14h1v1h-1z"/><path fill="#E5503F" d="M22 2h2v1h-2zM22 3h2v1h-2zM22 4h2v1h-2zM23 5h1v1h-1zM10 15h1v1h-1z"/><path fill="#FFFFFF" d="M6 3h1v1h-1zM5 4h1v1h-1zM5 5h1v1h-1z"/><path fill="#C9702A" d="M10 3h1v1h-1zM12 3h1v1h-1zM14 3h1v1h-1zM10 4h1v1h-1zM14 4h1v1h-1zM4 13h1v1h-1z"/><path fill="#FFD35A" d="M2 5h1v1h-1zM1 6h3v1h-3zM2 7h1v1h-1zM22 20h1v1h-1zM21 21h3v1h-3zM22 22h1v1h-1z"/><path fill="#F29A9A" d="M6 9h1v1h-1zM11 9h2v1h-2zM17 9h1v1h-1zM6 10h1v1h-1zM17 10h1v1h-1zM11 11h2v1h-2z"/><path fill="#FFE3BD" d="M9 9h2v1h-2zM13 9h2v1h-2zM9 10h1v1h-1zM14 10h1v1h-1zM9 11h1v1h-1zM14 11h1v1h-1z"/><path fill="#4C8DE0" d="M6 13h12v1h-12zM13 15h1v1h-1zM6 16h1v1h-1zM8 19h3v1h-3zM13 19h3v1h-3z"/><path fill="#F4F4F0" d="M8 14h8v1h-8zM6 15h4v1h-4zM11 15h2v1h-2zM14 15h2v1h-2zM7 16h9v1h-9zM8 18h3v1h-3zM13 18h3v1h-3z"/></symbol>',
-  zz: '<symbol id="zz" viewBox="0 0 24 24" shape-rendering="crispEdges"><path fill="#E5503F" d="M11 1h2v1h-2zM10 17h1v1h-1z"/><path fill="#CBCBC2" d="M11 2h2v1h-2zM8 19h8v1h-8z"/><path fill="#A9CBEA" d="M6 3h12v1h-12zM5 4h1v1h-1zM18 4h1v1h-1zM4 5h1v1h-1zM4 6h1v1h-1zM19 6h1v1h-1zM4 7h1v1h-1zM4 8h1v1h-1zM19 8h1v1h-1zM4 9h1v1h-1zM19 9h1v1h-1zM4 10h1v1h-1zM19 10h1v1h-1zM4 11h1v1h-1zM19 11h1v1h-1zM4 12h1v1h-1zM19 12h1v1h-1zM5 13h1v1h-1zM18 13h1v1h-1zM6 14h12v1h-12z"/><path fill="#F2994A" d="M6 4h1v1h-1zM17 4h1v1h-1zM5 5h1v1h-1zM7 5h3v1h-3zM11 5h1v1h-1zM13 5h1v1h-1zM15 5h4v1h-4zM6 6h4v1h-4zM11 6h3v1h-3zM15 6h4v1h-4zM6 7h13v1h-13zM5 8h14v1h-14zM5 9h3v1h-3zM9 9h1v1h-1zM11 9h3v1h-3zM15 9h1v1h-1zM17 9h2v1h-2zM5 10h4v1h-4zM10 10h5v1h-5zM16 10h3v1h-3zM5 11h1v1h-1zM7 11h2v1h-2zM15 11h2v1h-2zM18 11h1v1h-1zM5 12h1v1h-1zM7 12h2v1h-2zM15 12h2v1h-2zM18 12h1v1h-1zM6 13h3v1h-3zM15 13h3v1h-3zM5 17h1v1h-1zM5 18h1v1h-1z"/><path fill="#E3F0FB" d="M7 4h10v1h-10z"/><path fill="#FFFFFF" d="M6 5h1v1h-1zM5 6h1v1h-1zM5 7h1v1h-1z"/><path fill="#C9702A" d="M10 5h1v1h-1zM12 5h1v1h-1zM14 5h1v1h-1zM10 6h1v1h-1zM14 6h1v1h-1zM4 16h1v1h-1z"/><path fill="#8D9CF0" d="M19 5h3v1h-3zM20 6h1v1h-1zM19 7h3v1h-3z"/><path fill="#2A2523" d="M8 9h1v1h-1zM10 9h1v1h-1zM14 9h1v1h-1zM16 9h1v1h-1zM9 10h1v1h-1zM15 10h1v1h-1zM11 12h2v1h-2zM11 13h2v1h-2z"/><path fill="#F29A9A" d="M6 11h1v1h-1zM11 11h2v1h-2zM17 11h1v1h-1zM6 12h1v1h-1zM17 12h1v1h-1z"/><path fill="#FFE3BD" d="M9 11h2v1h-2zM13 11h2v1h-2zM9 12h2v1h-2zM13 12h2v1h-2zM9 13h2v1h-2zM13 13h2v1h-2z"/><path fill="#4C8DE0" d="M6 15h12v1h-12zM13 17h1v1h-1zM6 19h1v1h-1zM17 19h1v1h-1zM8 21h3v1h-3zM13 21h3v1h-3z"/><path fill="#F4F4F0" d="M8 16h8v1h-8zM8 17h2v1h-2zM11 17h2v1h-2zM14 17h2v1h-2zM6 18h12v1h-12zM7 19h1v1h-1zM16 19h1v1h-1zM8 20h3v1h-3zM13 20h3v1h-3z"/></symbol>',
-}
 const MOOD_BG = { run: '#E4E9FF', flag: '#FEF3C7', zz: '#EEF0F8' }
 /** 파스텔 동그라미 안의 고양이. 이 그림을 쓰는 이미지는 defs 에 CAT[mood] 를 함께 담아야 한다. */
 const catAvatar = (mood: 'run' | 'flag' | 'zz', cx: number, cy: number) => `<circle cx="${cx}" cy="${cy}" r="14" fill="${MOOD_BG[mood]}"/><use href="#${mood}" x="${cx - 11}" y="${cy - 11}" width="22" height="22"/>`
@@ -674,22 +661,23 @@ function richData(now: number, isWorking: boolean): Rich {
     verify: verifying ? { tone: 'info', text: '● 검증 중…' } : verify ? { tone: verify.state === 'ok' ? 'ok' : verify.state === 'fail' ? 'err' : 'warn', text: verify.text } : null,
     children,
     context,
-    week: week ? { percent: week.percent, mark: b && dayBase ? dayBase.percent + b.recommended : null, today: b && used !== null ? `${used.toFixed(0)}/${b.recommended.toFixed(0)}%p` : null, todayTone, reset: Number.isFinite(reset) ? `${md(reset)} ${hm(reset)}` : null, weight: WEIGHT_WEEKEND, recommended: b ? b.recommended : null, pace: b ? b.pace : null } : null,
-    turn: isWorking && turnStartedAt > 0 ? { text: fmt(Math.round((now - turnStartedAt) / 1000)), live: true } : lastTurnSec !== null ? { text: fmt(lastTurnSec), live: false } : null,
+    week: week ? { percent: week.percent, mark: b && dayBase ? dayBase.percent + b.recommended : null, today: b && used !== null ? `${used.toFixed(0)}/${b.recommended.toFixed(0)}%p` : null, todayTone, reset: Number.isFinite(reset) ? `${md(reset)} ${hm(reset)}` : null, recommended: b ? b.recommended : null, pace: b ? b.pace : null } : null,
+    turn: isWorking && turnStartedAt > 0 ? { text: fmtDur(now - turnStartedAt) } : lastTurnSec !== null ? { text: fmtDur(lastTurnSec * 1000) } : null,
     cache:
       lastAnswerAt > 0
-        ? { tone: cacheTone, alert: isWorking || left === null ? null : left <= 0 ? '✗ 캐시 만료' : left <= 20 ? `${left <= 10 ? '✗' : '⚠'} 캐시 ${left}분` : null, clock: hm(lastAnswerAt + CACHE_MINUTES * 60_000), since: `답변 + ${CACHE_MINUTES}분` }
+        ? { tone: cacheTone, alert: isWorking || left === null ? null : left <= 0 ? '✗ 캐시 만료' : left <= 20 ? `${left <= 10 ? '✗' : '⚠'} 캐시 ${left}분` : null }
         : null,
     history,
-    lastTurn: lastTurnSec !== null ? fmt(lastTurnSec) : null,
-    lastVerify: verify ? verify.text : '없음',
     mood: isWorking ? 'run' : alert ? 'flag' : 'zz',
   }
 }
 
 // ---- 검증: 편집한 파일을 확인하고 결과를 띠에 남긴다 --------------------------------
 
-async function runVerify($: any, files: string[]): Promise<Verify> {
+// Windows 의 Python Store 별칭(python.exe)은 Python 이 없을 때도 실행되고 9009 를 돌려준다. 실패가 아니라 "도구 없음"이라 다음 후보로 넘어간다
+const NOT_INSTALLED = 9009
+
+export async function runVerify($: any, files: string[]): Promise<Verify> {
   const py = files.filter(f => /\.py$/i.test(f))
   const ts = files.filter(f => /\.(ts|tsx)$/i.test(f))
   if (py.length === 0 && ts.length === 0) return null // 확인 대상이 아닌 파일(문서 등)은 말하지 않는다
@@ -743,7 +731,8 @@ async function findTsconfigDir($: any, file: string): Promise<string | null> {
 async function tryRun($: any, candidates: string[][], cwd: string | undefined, timeoutMs: number) {
   for (const argv of candidates) {
     try {
-      return await $.process.run(argv, { cwd, timeoutMs })
+      const run = await $.process.run(argv, { cwd, timeoutMs })
+      if (run.exitCode !== NOT_INSTALLED) return run
     } catch {
       // 다음 후보
     }

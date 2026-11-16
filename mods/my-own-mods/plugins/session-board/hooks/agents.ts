@@ -7,6 +7,7 @@
 
 import type { Register } from 'claude-code'
 
+import { fmtDur } from './art'
 import { bandTick } from './band'
 
 // 세션 보드와 같은 패널을 쓴다
@@ -55,9 +56,6 @@ const LABEL: Record<string, string> = {
 const isLive = (status: string) => status === 'running' || status === 'pending'
 // 상태는 기호(윗줄)와 단어(아랫줄)와 색, 세 가지로 말한다. 테마 색 이름을 쓴다.
 const COLOR: Record<string, string> = { running: 'suggestion', pending: 'suggestion', completed: 'success', failed: 'error', killed: 'warning' }
-export function fmtTime(sec: number): string {
-  return sec < 60 ? `${sec}초` : `${Math.floor(sec / 60)}분${String(sec % 60).padStart(2, '0')}초`
-}
 
 // ---- 우주비행사 고양이 (24x24 도트, 원본 캐릭터) --------------------------------
 // 격자에 색 칸을 찍고, 같은 줄에서 이어진 같은 색을 rect 하나로 합쳐 SVG 를 만든다. 유형은 소품과 포인트 색만 바꾼다.
@@ -373,7 +371,7 @@ export const register: Register = on => {
  */
 function agentSlot(t: any, a: A, now: number, animate: boolean) {
   const { Box, Text, Svg } = t
-  const time = fmtTime(Math.max(0, Math.round(((a.endedAt ?? now) - a.startedAt) / 1000)))
+  const time = fmtDur((a.endedAt ?? now) - a.startedAt)
   const set = FRAMES[a.type] ?? DEFAULT_FRAMES
   const face = Svg ? '●' : isLive(a.status) ? set[Math.floor(frame / 2) % set.length] : a.status === 'completed' ? '✓' : a.status === 'failed' ? '✗' : '·'
   const text = Box({

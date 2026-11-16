@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { DEFAULT_FRAMES, FRAMES, catState, catSvg, fmtTime } from './agents'
+import { DEFAULT_FRAMES, FRAMES, catState, catSvg } from './agents'
 
 // 디자인 패키지의 원본 SVG 64개(유형 4 x 상태 4 x 프레임 4) 길이. 같은 칸을 같은 순서로 찍었는지 본다.
 const GOLDEN: Record<string, number> = {"Explore_done_0":7009,"Explore_done_1":6984,"Explore_done_2":7009,"Explore_done_3":6984,"Explore_fail_0":6998,"Explore_fail_1":7004,"Explore_fail_2":6963,"Explore_fail_3":7004,"Explore_idle_0":6166,"Explore_idle_1":6108,"Explore_idle_2":6343,"Explore_idle_3":6502,"Explore_run_0":6613,"Explore_run_1":6605,"Explore_run_2":6669,"Explore_run_3":6106,"Plan_done_0":7009,"Plan_done_1":6984,"Plan_done_2":7009,"Plan_done_3":6984,"Plan_fail_0":7055,"Plan_fail_1":7061,"Plan_fail_2":7020,"Plan_fail_3":7061,"Plan_idle_0":6223,"Plan_idle_1":6165,"Plan_idle_2":6400,"Plan_idle_3":6559,"Plan_run_0":6670,"Plan_run_1":6662,"Plan_run_2":6669,"Plan_run_3":6163,"default_done_0":7121,"default_done_1":7040,"default_done_2":7121,"default_done_3":7040,"default_fail_0":6768,"default_fail_1":6774,"default_fail_2":6733,"default_fail_3":6774,"default_idle_0":5936,"default_idle_1":5878,"default_idle_2":6113,"default_idle_3":6272,"default_run_0":6383,"default_run_1":6375,"default_run_2":6439,"default_run_3":5876,"general-purpose_done_0":7237,"general-purpose_done_1":7212,"general-purpose_done_2":7237,"general-purpose_done_3":7212,"general-purpose_fail_0":6884,"general-purpose_fail_1":6890,"general-purpose_fail_2":6849,"general-purpose_fail_3":6890,"general-purpose_idle_0":6051,"general-purpose_idle_1":5993,"general-purpose_idle_2":6228,"general-purpose_idle_3":6387,"general-purpose_run_0":6497,"general-purpose_run_1":6490,"general-purpose_run_2":6553,"general-purpose_run_3":5991}
@@ -34,9 +34,4 @@ test('캐릭터는 한 글자이고 두 칸이 될 수 있는 글자를 쓰지 �
       expect(ambiguous.test(ch)).toBe(false)
     }
   }
-})
-
-test('시간은 짧게 쓴다', () => {
-  expect(fmtTime(9)).toBe('9초')
-  expect(fmtTime(75)).toBe('1분15초')
 })
