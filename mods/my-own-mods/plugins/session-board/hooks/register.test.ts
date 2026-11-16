@@ -1,32 +1,20 @@
 import { expect, test } from 'claude-code/testing'
 
-import { applyPlan, appLink, avatarSvg, badges, barSvg, fmtDur, groupOf, infoSvg, parseRec, nameWidth, progress, projectSlug, titleOf, transcriptTitle, type Rec } from './register'
+import { applyPlan, appLink, avatarSvg, badges, barSvg, fmtDur, groupOf, headOf, parseRec, nameWidth, progress, projectSlug, titleOf, transcriptTitle, type Rec } from './register'
 
 const NOW = 1_000_000_000_000
 const rec = (p: Partial<Rec> = {}): Rec => ({ id: 's1', name: '프로젝트', state: 'idle', since: NOW, turnStartedAt: null, waitFor: null, done: 0, total: 0, step: '', updatedAt: NOW, appId: null, title: '', root: '', ask: null, report: null, askClosedAt: 0, reportClosedAt: 0, ...p })
 
-test('상태바는 상태 글자와 점점 채워지는 막대를 한 덩어리(아바타 높이)로 그리고, 작업 목록이 없으면 막대를 그리지 않는다', () => {
-  const run = infoSvg(rec({ state: 'running', turnStartedAt: NOW - 252_000, done: 3, total: 7, step: '시험 작성' }), 'running', NOW)
-  for (const t of ['>작업 중</tspan>', '> 4분 12초</tspan>', '>3/7</tspan>']) expect(run.svg).toContain(t)
-  expect(run.h).toBe(32) // 고양이 아바타와 같은 높이라 이름 | 상태바 | 이 세션 이 한 줄이다
-  expect(run.svg).not.toContain('rx="7.5"') // 알약은 쓰지 않는다
-  expect(run.svg.indexOf('작업 중')).toBeLessThan(run.svg.indexOf('rx="2"')) // 상태 글자 → 막대
-  // 끝낸 3/7 만큼 채우고(막대 폭 52 의 3/7), 끝에 현재 위치 동그라미가 있다
-  expect(run.svg).toContain(`width="${Math.round((52 * 3) / 7)}" height="4" rx="2" fill="#4F6BFF"`)
-  expect(run.svg).toContain('<circle')
-  // 0/8 이어도 시작했음이 보이는 작은 끝부분과 동그라미가 있다
-  const zero = infoSvg(rec({ state: 'running', done: 0, total: 8 }), 'running', NOW).svg
-  expect(zero).toContain('width="5" height="4" rx="2" fill="#4F6BFF"')
-  expect(zero).toContain('<circle')
-  // 유휴 세션은 채운 만큼만 보이고 동그라미가 없다
-  const idleDone = infoSvg(rec({ state: 'idle', since: NOW - 11_000, done: 2, total: 2 }), 'idle', NOW)
-  expect(idleDone.svg).toContain('> 11초</tspan>')
-  expect(idleDone.svg).not.toContain('<circle')
-
-  const wait = infoSvg(rec({ state: 'waiting', waitFor: 'Bash 승인', since: NOW - 65_000 }), 'notice', NOW)
-  expect(wait.svg).toContain('>Bash 승인 대기</tspan>') // 폭이 모자라면 시간은 빠지고 상태 글자는 남는다
-  expect(wait.svg).not.toContain('rx="2"') // 작업 목록이 없다
-  expect(wait.svg).not.toContain('0/0')
+test('칸 머리글은 상태 글자·뜻 색·시간이고, 작업 목록이 있으면 단계를 붙인다', () => {
+  expect(headOf(rec({ state: 'running', turnStartedAt: NOW - 252_000, done: 3, total: 7 }), 'running', NOW)).toEqual({ label: '작업 중', color: 'suggestion', time: '4분 12초 · 3/7 단계', dim: false })
+  expect(headOf(rec({ state: 'idle', since: NOW - 11_000 }), 'idle', NOW)).toEqual({ label: '쉬는 중', color: undefined, time: '11초', dim: true })
+  expect(headOf(rec({ state: 'waiting', waitFor: 'Bash 승인', since: NOW - 65_000 }), 'notice', NOW)).toMatchObject({ label: 'Bash 승인 대기', color: 'warning', time: '1분 05초' })
+  const ask = { kind: 'request' as const, question: 'q', background: [], options: [], at: NOW - 60_000 }
+  expect(headOf(rec({ ask }), 'request', NOW)).toMatchObject({ label: '결재', color: 'error', time: '1분 00초' })
+  expect(headOf(rec({ ask: { ...ask, at: NOW - 25 * 3600_000 } }), 'request', NOW).label).toBe('결재 낡음')
+  expect(headOf(rec({ report: { lines: ['a'], at: NOW - 5_000 } }), 'report', NOW)).toMatchObject({ label: '확인', color: 'success' })
+  expect(headOf(rec({ state: 'ended', ask }), 'request', NOW)).toMatchObject({ label: '세션 끝남', dim: true })
+  expect(headOf(rec({ updatedAt: NOW - 100_000, ask }), 'request', NOW).label).toBe('응답 없음')
 })
 
 test('고양이 아바타는 상태마다 다르고, 앱 링크는 앱 세션 번호로 만든다', () => {
@@ -192,7 +180,8 @@ test('내 상태를 파일에 쓰고, 패널은 다른 세션 기록과 함께 �
       expect([surface, ...found]).toEqual([surface, true, true, true])
       expect(await ui.find({ type: 'Button', text: /다른 프로젝트/ })).toBeTruthy() // 이름은 누르면 펴지는 단추다
     } else {
-      // 데스크톱은 카드를 이미지 한 장으로 그린다. 이미지 안의 글자는 infoSvg 시험이 지킨다.
+      // 데스크톱은 세션마다 얇은 칸이다. 고양이는 그림, 머리글은 글자다
+      expect((await ui.find({ type: 'Text', text: /● 작업 중/ }))?.text).toBeDefined()
       expect(await ui.find({ type: 'Svg' })).toBeTruthy()
       expect((await ui.find({ type: 'Text', text: /세션 \d+개/ }))?.text).toBeDefined()
     }
@@ -565,12 +554,37 @@ test('펼칠 것이 없는 줄(진행 중·쉬는 중)은 이름을 누르면 �
 })
 
 test('이름 폭은 패널 폭을 따라 넓어지고, 상태 글자는 오른쪽 끝에 맞춘다', () => {
-  expect(nameWidth(40)).toBe(110) // 기본 폭은 앞 판과 같다
-  expect(nameWidth(60)).toBe(270)
+  expect(nameWidth(40)).toBe(210) // 이름은 머리글 아래 줄을 혼자 쓴다
+  expect(nameWidth(60)).toBe(370)
   expect(nameWidth(10)).toBe(70) // 아주 좁아도 이름 자리는 남긴다
-  expect(nameWidth(undefined)).toBe(110)
-  expect(infoSvg(rec({ state: 'idle', since: NOW - 11_000 }), 'idle', NOW).svg).toContain('text-anchor="end"')
+  expect(nameWidth(undefined)).toBe(210)
 })
+
+test('패널을 닫으면 입력창 위에 여는 단추가 생기고, 누르면 패널이 열리며 단추가 사라진다. 아래 띠는 가리지 않는다', async ($, on) => {
+  const seen = fakeBoard(on, {})
+  on('ui.close', () => ({ value: undefined }) as any)
+  on('ui.panes', () => ({ value: [{ id: 'session-board', isPlaced: true }] }) as any)
+  on('ui.render', { component: 'AbovePrompt' }, ($: any, e: any) => $.ui.resolve(e).Text({ children: '아래 띠' }))
+  await $.session.start(START)
+  const props = { hasSurvey: false, bodyColumns: 80, isWorking: false }
+  const band = () => $.ui.mount({ plugin: 'session-board', component: 'AbovePrompt', props, surface: 'desktop' } as any)
+  let ui = await band()
+  expect(await ui.find({ key: 'open-board' })).toBeFalsy() // 열려 있으면 단추가 없다
+  await ui.unmount()
+  await $.command.run({ command: 'session_board', args: '' } as any) // 닫는다
+  ui = await band()
+  expect(await ui.find({ key: 'open-board' })).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /아래 띠/ }))?.text).toBe('아래 띠')
+  const opens = seen.opens
+  await ui.press({ key: 'open-board' })
+  expect(seen.opens).toBe(opens + 1)
+  await ui.unmount()
+  ui = await band()
+  expect(await ui.find({ key: 'open-board' })).toBeFalsy()
+  await ui.unmount()
+})
+
+// 한 창(세션 보드 아래의 확인 카드)은 시험 도구로 그릴 수 없다: 도구 호출이 붙잡혀 있는 동안 패널 그리기가 그 호출을 기다린다. 앱에서 확인한다
 
 // ---- 검토 고침 -------------------------------------------------------------------------
 const OPEN_ASK = (kind: 'request' | 'notice', at = LIVE()) => ({ kind, question: `${kind} 질문`, background: [], options: [], at })

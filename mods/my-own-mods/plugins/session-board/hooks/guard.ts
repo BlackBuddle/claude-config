@@ -6,10 +6,12 @@
 //   2) rm -r/-f, git reset --hard, git clean, git push --force, git checkout/restore . , Remove-Item -Recurse
 //      → 영향 범위를 재서 패널에 띄우고 진행/취소를 기다림
 // 호스트가 소스에서 on(...) 과 $.noun.method(...) 를 읽으므로 literal 로 쓰고, $ 를 받는 도우미는 최상위 함수로 둔다.
+// 세션 보드 플러그인의 두 번째 모듈이다. 엔진은 한 플러그인이 자기 패널에만 그리게 해서, 한 창(위 세션 보드, 아래 확인 카드)으로 쓰려고 옮겼다 (2026-11-16 사용자 결정)
 
 import type { Register } from 'claude-code'
 
-const PANE_ID = 'edit-guard'
+// 세션 보드와 같은 패널을 쓴다. 확인할 것이 있을 때만 세션 보드 아래에 카드를 붙인다
+const PANE_ID = 'session-board'
 const HOLD_LIMIT_MS = 10 * 60 * 1000
 const LIST_MAX = 10
 const POLL_MS = 250
@@ -32,9 +34,12 @@ export const register: Register = on => {
   on('tool.call', { tool: 'Bash' }, ($, e, next) => guard($, e, next, 'Bash')).catch(failClosed)
   on('tool.call', { tool: 'PowerShell' }, ($, e, next) => guard($, e, next, 'PowerShell')).catch(failClosed)
 
-  on('ui.render', { component: 'Pane' }, ($, e, next) => {
-    if (e.requestId !== PANE_ID || held === null || held.report === null) return next(e)
-    return draw($.ui.resolve(e), held, false, e.surface)
+  // 세션 보드(아래 모듈)를 먼저 그리고 그 아래에 확인 카드를 붙인다. hooks.json 에서 이 모듈이 먼저라 이 훅이 바깥이다
+  on('ui.render', { component: 'Pane', requestId: PANE_ID }, async ($, e, next) => {
+    if (held === null || held.report === null) return next(e)
+    const board: any = await next(e)
+    const t = $.ui.resolve(e) as any
+    return t.Box({ flexDirection: 'column', gap: 1, children: [t.Box({ key: 'board', flexDirection: 'column', children: [board] }), t.Box({ key: 'guard', flexDirection: 'column', children: [draw(t, held, false, e.surface)] })] })
   })
 
   on('ui.render', { component: 'AbovePrompt' }, ($, e, next) => {
@@ -91,7 +96,8 @@ async function guard($: any, e: any, next: any, tool: 'Bash' | 'PowerShell') {
     mine.cwd = cwd
     mine.showCommand = unknown // 영향을 모를 때는 명령을 처음부터 펼쳐 보인다
 
-    const opened = await $.ui.open({ id: PANE_ID, title: 'edit-guard', focus: true, rows: paneRows(mine.report) })
+    // 세션 보드와 같은 제목으로 연다. 패널이 이미 열려 있으면 그대로 두고 카드만 붙는다
+    const opened = await $.ui.open({ id: PANE_ID, title: '세션', focus: true })
     isPlaced = opened.isPlaced
     if (!isPlaced) mine.where = 'band' // 패널을 못 그리는 좁은 화면이면 입력창 위 띠로 대신 그린다
     $.ui.invalidate('ui.render')
@@ -115,11 +121,7 @@ async function guard($: any, e: any, next: any, tool: 'Bash' | 'PowerShell') {
     // 중단이면 interrupted, 그 밖의 예외는 안전하게 거부한다.
     mine.decision = next.signal?.aborted ? 'interrupted' : 'error'
   } finally {
-    try {
-      if (isPlaced) await $.ui.close({ id: PANE_ID })
-    } catch {
-      // 이미 닫힘
-    }
+    // 패널은 닫지 않는다: 세션 보드의 패널이다. 카드만 사라진다
     if (held === mine) held = null
     $.ui.invalidate('ui.render')
   }
@@ -619,11 +621,6 @@ function size(bytes: number): string {
 }
 
 // ---- 그리기 ----------------------------------------------------------------
-
-// 칸 수: 테두리 2 + 제목 1 + 영향 2 + 위치 2 + 목록 앞 빈 줄 1 + 메모 1 + 명령 토글 1 + 펼친 명령 3 + 버튼 1 + 남은 시간 1, 거기에 복구·원인·목록 줄.
-function paneRows(report: Report): number {
-  return Math.min(30, 18 + report.lines.length + (report.more ? 1 : 0) + (report.recover?.length ?? 0) + (report.facts?.length ?? 0))
-}
 
 // 위험을 한 단어로 먼저 말한다.
 const TITLE: Record<string, string> = {

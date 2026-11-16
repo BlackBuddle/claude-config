@@ -7,14 +7,15 @@
 
 import type { Register } from 'claude-code'
 
-import { BW, C, KIND_LABEL, SH, SKIN, SW, avatarSvg, barSvg, clip, fmtDur, hairline, headSvg, infoSvg, mePill } from './art'
+import { C, KIND_LABEL, SKIN, avatarSvg, barSvg, clip, fmtDur, headOf } from './art'
 import type { Mood } from './art'
 import { APP_ID_FORMAT, closable, deadLabel, purgeable, groupOf, isDead, isNestedSession, judge, openAsk, openReport, optionsLine, orphanIds, parseAsk, parseReport } from './asks'
 import type { Ask, Group, Report } from './asks'
+import { register as registerGuard } from './guard'
 import { cardAsk, lastTurn, signalsOf } from './signals'
 import type { Signals } from './signals'
 
-export { avatarSvg, barSvg, fmtDur, groupOf, infoSvg } // 시험이 이 모듈에서 읽는다
+export { avatarSvg, barSvg, fmtDur, groupOf, headOf } // 시험이 이 모듈에서 읽는다
 
 const PANE_ID = 'session-board'
 const TICK_MS = 5_000 // 5초마다 폴더를 다시 읽는다 (패널이 닫혀 있어도 새 결재를 알리려고)
@@ -340,8 +341,8 @@ function pressName($: any, r: Rec, isMe: boolean) {
   else toggle($, r.id)
 }
 
-/** 이름에 쓸 수 있는 폭(px). 패널 폭(글자 칸 수)에서 고양이·알약·상태바·여백 몫을 뺀다. 넓히면 제목이 더 보인다. */
-export const nameWidth = (cols: unknown): number => Math.max(70, (typeof cols === 'number' && cols > 0 ? cols : 40) * 8 - 210)
+/** 이름에 쓸 수 있는 폭(px). 패널 폭(글자 칸 수)에서 고양이·칸 테두리·여백 몫을 뺀다. 넓히면 제목이 더 보인다. */
+export const nameWidth = (cols: unknown): number => Math.max(70, (typeof cols === 'number' && cols > 0 ? cols : 40) * 8 - 110)
 
 /** 칸을 연 상태를 바꾼다. 같은 줄을 다시 누르면 접는다. */
 function toggle($: any, id: string) {
@@ -385,7 +386,9 @@ async function onTick($: any) {
   if (isOpen) $.ui.invalidate('ui.render')
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  // 확인 패널(edit-guard)을 먼저 건다: 그 패널 훅이 바깥에서 세션 보드를 감싸 아래에 카드를 붙인다. 플러그인 1개는 모듈 1개만 등록할 수 있다
+  registerGuard(on, options)
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
@@ -426,6 +429,7 @@ export const register: Register = on => {
     if ((await $.ui.panes()).some(p => p.id === PANE_ID && p.isPlaced)) {
       await $.ui.close({ id: PANE_ID })
       isOpen = false
+      $.ui.invalidate('ui.render') // 입력창 위에 여는 단추를 보인다
       return { text: '세션 상태판을 닫았습니다.' }
     }
     const opened = await openPane($)
@@ -442,8 +446,27 @@ export const register: Register = on => {
   })
 
   on('ui.close', async ($, e, next) => {
-    if (e.id === PANE_ID && e.origin.kind === 'person') isOpen = false // 사용자가 닫았다. 새 결재가 오면 다시 연다
+    if (e.id === PANE_ID && e.origin.kind === 'person') {
+      isOpen = false // 사용자가 닫았다. 새 결재가 오면 다시 연다
+      $.ui.invalidate('ui.render') // 입력창 위에 여는 단추를 보인다
+    }
     return next(e)
+  })
+
+  // 패널이 닫혀 있을 때만 입력창 위 띠 맨 끝에 여는 단추를 둔다. 열려 있으면 아무것도 그리지 않는다
+  // 별도 띠를 두지 않기로 했지만(인계 문서), 닫힌 패널을 여는 길이 명령뿐이라 이 경우만 연다 (2026-11-16 사용자 결정)
+  // 띠는 한 자리라서 아래 플러그인의 띠를 먼저 받아 함께 그린다 (relay-band 와 같은 방식)
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const props: any = (e as any).props ?? {}
+    if (props.hasSurvey || isOpen) return next(e)
+    const beneath: any = await next(e)
+    const { Box, Button } = $.ui.resolve(e) as any
+    const mine = Box({
+      key: 'session-board-open',
+      flexDirection: 'row',
+      children: [Box({ key: 'fl', flexGrow: 1 }), Button({ key: 'open-board', label: '세션 ▸', plain: true, onPress: () => openPane($) })],
+    })
+    return beneath ? Box({ flexDirection: 'column', children: [Box({ key: 'beneath', flexDirection: 'column', children: [beneath] }), mine] }) : mine
   })
 
   on('turn.start', async ($, e, next) => {
@@ -542,7 +565,7 @@ export const register: Register = on => {
       })
     }
     if (typeof Svg === 'function' && (e as any).surface !== 'terminal') {
-      // 그림을 그릴 수 있는 화면(데스크톱): 세션마다 파스텔 카드. 기다리는 칸은 오래 기다린 것부터, 나머지는 최근 상태가 바뀐 것부터.
+      // 그림을 그릴 수 있는 화면(데스크톱): 세션마다 얇은 칸(결재함 틀). 기다리는 칸은 오래 기다린 것부터, 나머지는 최근 상태가 바뀐 것부터.
       const sections = GROUPS.map(g => ({ g, rows: sortRows(shown.filter(x => x.g === g.key).map(x => x.r), g.key) })).filter(s => s.rows.length > 0)
       return Box({
         flexDirection: 'column',
@@ -574,31 +597,58 @@ export const register: Register = on => {
 // 이 값을 OS 에 넘기므로 번호가 정확한 모양일 때만 쓴다
 export const appLink = (r: Rec): string | null => (r.appId !== null && APP_ID_FORMAT.test(r.appId) ? `claude://claude.ai/epitaxy/${r.appId}` : null)
 
-/** 세션 하나의 줄: 고양이 · 이름(누르면 펴짐) | 이 세션 · 상태바. 한 줄에 놓아 세션 하나가 한 줄만 차지한다. 펴지면 그 아래에 내용이 붙는다. */
+/**
+ * 세션 하나의 칸(결재함 틀): 얇은 테두리 안에 고양이 | 머리글(● 상태 · 시간 · 이 세션) 위, 이름 단추 아래. 펴지면 그 아래에 내용이 붙는다.
+ * 앱 기본 부품과 테마의 뜻 색만 쓴다. 그래서 앱의 어두운 테마도 따라간다 (2026-11-16 사용자 결정 B안).
+ */
 function sessionCard($: any, t: any, r: Rec, g: Mood, now: number, isMe: boolean, nameMax: number) {
-  const { Box, Svg, Button } = t
-  const s = SKIN[g]
+  const { Box, Text, Svg, Button } = t
+  const head = headOf(r, g, now)
   // 단추 글자는 줄어들지 않아 패널 폭에 맞춰 미리 자른다. 패널을 넓히면 제목이 더 보인다. 계산이 빗나가도 이름 칸만 줄어든다
   const name = clip(shownName(r), nameMax, 14)
-  const info = infoSvg(r, g, now)
-  // 이미지 크기를 고정한다: 크기를 안 주면 패널을 넓힐 때 이미지가 폭에 맞춰 끝없이 커진다.
   const row = Box({
     key: 'row',
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 1,
-    backgroundColor: g === 'request' || g === 'notice' || g === 'report' ? s.tint : undefined, // 줄은 가볍게 두고, 사용자를 기다리는 줄만 연한 바탕으로 눈에 띄게 한다
-    paddingX: 1,
+    gap: 'sm',
     children: [
-      Box({ key: 'avb', flexShrink: 0, children: [Svg({ key: 'av', source: avatarSvg(g), alt: `${s.alt} 고양이`, width: 32, height: 32 })] }),
-      // 패널의 Link 는 claude:// 주소를 열지 않는다. 이름은 펴는 단추이고 이동은 펴진 곳의 "이동" 단추가 한다
-      Box({ key: 'nmb', flexShrink: 1, minWidth: 0, children: [Button({ key: `nm:${r.id}`, plain: true, label: name, onPress: () => pressName($, r, isMe) })] }),
-      Box({ key: 'fl', flexGrow: 1 }),
-      // 이 세션 알약은 상태바 앞에 둔다. 상태바가 늘 줄의 오른쪽 끝에 서서 상태·시간이 줄마다 같은 자리에 온다
-      isMe ? Box({ key: 'meb', flexShrink: 0, children: [Svg({ key: 'me', source: mePill, alt: '이 세션', width: 44, height: 15 })] }) : null,
-      Box({ key: 'infob', flexShrink: 0, children: [Svg({ key: 'info', source: info.svg, alt: `${s.alt} 상태: ${r.state}${r.total > 0 ? `, 진척 ${r.done}/${r.total}` : ''}${r.step !== '' ? `, ${r.step}` : ''}`, width: SW, height: SH })] }),
+      // 이미지 크기를 고정한다: 크기를 안 주면 패널을 넓힐 때 이미지가 폭에 맞춰 끝없이 커진다
+      Box({ key: 'avb', flexShrink: 0, children: [Svg({ key: 'av', source: avatarSvg(g), alt: `${SKIN[g].alt} 고양이`, width: 28, height: 28 })] }),
+      Box({
+        key: 'mid',
+        flexDirection: 'column',
+        flexGrow: 1,
+        flexShrink: 1,
+        minWidth: 0,
+        children: [
+          Box({
+            key: 'head',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 'sm',
+            children: [
+              Text({ key: 'st', color: head.color, size: 'caption', weight: 'semibold', dimColor: head.dim, children: `● ${head.label}` }),
+              head.time !== '' ? Text({ key: 'tm', size: 'caption', dimColor: true, children: head.time }) : null,
+              Box({ key: 'fl', flexGrow: 1 }),
+              isMe ? Text({ key: 'me', size: 'caption', dimColor: true, children: '이 세션' }) : null,
+            ],
+          }),
+          // 패널의 Link 는 claude:// 주소를 열지 않는다. 이름은 단추이고, 펼칠 것이 없으면 바로 그 세션으로 간다
+          Button({ key: `nm:${r.id}`, plain: true, label: name, onPress: () => pressName($, r, isMe) }),
+        ],
+      }),
     ],
   })
-  return Box({ key: r.id, flexDirection: 'column', children: [row, openId === r.id ? detailBox($, t, r, now, isMe) : null] })
+  return Box({
+    key: r.id,
+    flexDirection: 'column',
+    borderStyle: 'single',
+    borderColor: 'subtle',
+    borderDimColor: true,
+    paddingX: 'md',
+    paddingY: 'sm',
+    children: [row, openId === r.id ? detailBox($, t, r, now, isMe) : null],
+  })
 }
 
 /** 펴진 칸의 내용: 질문, 배경 2줄, 선택지 1줄, 확인 줄, 단추(이동·확인·닫기). 답하는 단추는 없다. 답은 그 세션의 대화에서 한다. */
@@ -646,22 +696,30 @@ function sortRows(rows: Rec[], g: Group): Rec[] {
 }
 
 
-/** 흰 상자 하나에 묶음 머리글과 세션 줄을 쌓는다(앱 테마와 관계없이 읽히도록 흰 바탕). 줄 사이는 얇은 구분선. */
+/** 묶음마다 흐린 작은 제목(진행 중 1)과 세션 칸들을 쌓는다. 결재함의 묶음 모양이다. */
 function desktopBoard($: any, t: any, sections: { g: (typeof GROUPS)[number]; rows: Rec[] }[], now: number, nameMax: number) {
-  const { Box, Svg, Button } = t
+  const { Box, Text, Button } = t
   return Box({
     key: 'board',
     flexDirection: 'column',
-    gap: 0,
-    backgroundColor: C.white,
-    borderStyle: 'round',
-    borderColor: C.line,
-    paddingX: 1,
-    children: sections.flatMap(sec => [
-      Svg({ key: `h-${sec.g.key}`, source: headSvg(sec.g.title, sec.rows.length, sec.g.key), alt: `${sec.g.title} ${sec.rows.length}`, width: BW + 16, height: 26 }),
-      ...ackAll($, Box, Button, sec.g.key, sec.rows),
-      ...sec.rows.flatMap((r, i) => [i > 0 ? Svg({ key: `d-${r.id}`, source: hairline, alt: '구분선' }) : null, sessionCard($, t, r, sec.g.key, now, me?.id === r.id, nameMax)]),
-    ]),
+    gap: 'md',
+    children: sections.map(sec =>
+      Box({
+        key: `sec-${sec.g.key}`,
+        flexDirection: 'column',
+        gap: 'xs',
+        children: [
+          Box({
+            key: 'h',
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            children: [Text({ key: 't', dimColor: true, size: 'caption', weight: 'semibold', children: `${sec.g.title} ${sec.rows.length}` }), ...ackAll($, Box, Button, sec.g.key, sec.rows)],
+          }),
+          ...sec.rows.map(r => sessionCard($, t, r, sec.g.key, now, me?.id === r.id, nameMax)),
+        ],
+      }),
+    ),
   })
 }
 

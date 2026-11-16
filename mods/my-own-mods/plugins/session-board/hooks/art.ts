@@ -1,4 +1,4 @@
-// session-board 의 그림: 색, 고양이 아바타, 상태바, 머리글 SVG. 입출력이 없는 순수 함수만 둔다.
+// session-board 의 그림과 머리글: 색, 고양이 아바타, 칸 머리글. 입출력이 없는 순수 함수만 둔다.
 
 import { OLD_ASK_MS, deadLabel, isDead, openAsk, openReport } from './asks'
 import type { Group } from './asks'
@@ -21,17 +21,10 @@ export function barSvg(done: number, total: number, color: string, w = 160): str
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} 6"><rect width="${w}" height="6" rx="3" fill="${C.line}"/>${fill > 0 ? `<rect width="${fill}" height="6" rx="3" fill="${color}"/>` : ''}</svg>`
 }
 
-// ---- 데스크톱: 세션마다 파스텔 카드. 우주비행사 고양이 아바타 + 상태 알약 + 진척 구슬 ----
-// 이름은 호스트 Link 로 그려 누르면 그 세션으로 이동한다(앱 링크). 이미지는 눌리지 않아 눌리는 곳은 이름뿐이다.
 // 고양이는 agent-panel 의 캐릭터에서 상태 셋(달리는 / 깃발 든 / 조는)만 작은 조각으로 옮겨 왔다.
-const BW = 226 // 카드 아랫줄 이미지 폭: 패널 안쪽 폭(약 270) 에서 아바타 자리 들여쓰기(약 40)를 뺀 값. 넘으면 이미지가 줄어 글씨가 작아진다
 const P = { indigoText: '#3F5BEF', amberText: '#92400E', mute: '#B6BACF', tag: '#9AA0BC' }
-const SANS = "'Noto Sans KR','Malgun Gothic',system-ui,sans-serif"
-const MONO = "'JetBrains Mono',Consolas,monospace"
-type Run = { t: string; fill: string; weight?: number; mono?: boolean }
 const isWide = (ch: string) => /[ᄀ-ᇿ⺀-꓏가-힣豈-﫿＀-｠]/.test(ch)
 const tw = (s: string, size: number, mono = false) => [...s].reduce((n, ch) => n + (isWide(ch) ? size : size * (mono ? 0.6 : 0.56)), 0)
-const xml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 /** 폭을 넘으면 끝을 줄이고 …을 붙인다. */
 function clip(s: string, max: number, size: number): string {
   if (tw(s, size) <= max) return s
@@ -39,8 +32,6 @@ function clip(s: string, max: number, size: number): string {
   while (o.length > 1 && tw(`${o}…`, size) > max) o = o.slice(0, -1)
   return `${o}…`
 }
-const rs = (list: Run[], x: number, y: number, size: number, anchor = '') =>
-  `<text x="${x}" y="${y}" font-size="${size}" xml:space="preserve"${anchor ? ` text-anchor="${anchor}"` : ''}>${list.map(r => `<tspan fill="${r.fill}" font-family="${r.mono ? MONO : SANS}" font-weight="${r.weight ?? 400}">${xml(r.t)}</tspan>`).join('')}</text>`
 
 type Mood = Exclude<Group, 'hidden'>
 type Skin = { tint: string; edge: string; bubble: string; pill: string; text: string; bead: string; cat: 'run' | 'flag' | 'zz'; alt: string }
@@ -66,57 +57,25 @@ export function avatarSvg(g: Mood): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><defs>${CAT[s.cat]}</defs><circle cx="18" cy="18" r="17" fill="${s.bubble}"/><use href="#${s.cat}" x="4" y="5" width="28" height="28"/></svg>`
 }
 
-/** 묶음 머리글: 제목과 개수 알약. */
-const headSvg = (title: string, n: number, g: Mood) => {
-  const s = SKIN[g]
-  const nw = tw(String(n), 10.5, true) + 10
-  const nx = 2 + tw(title, 13) + 6
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${BW + 16}" height="26" viewBox="0 0 ${BW + 16} 26">${rs([{ t: title, fill: C.ink, weight: 700 }], 2, 18, 13)}<rect x="${nx}" y="6" width="${nw}" height="15" rx="7.5" fill="${s.pill}"/>${rs([{ t: String(n), fill: s.text, weight: 700, mono: true }], nx + nw / 2, 17, 10.5, 'middle')}</svg>`
-}
-const DOT = '#D3D8EC' // 아직 안 한 단계: 연한 파스텔 바탕에서도 보이는 진한 회색
-/** "이 세션" 작은 알약. 글자 배경으로 그리면 호스트 글씨 크기라 너무 커서 이미지로 그린다. */
-const mePill = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 15"><rect width="44" height="15" rx="7.5" fill="${C.soft}"/>${rs([{ t: '이 세션', fill: C.dim, weight: 700 }], 22, 11, 10.5, 'middle')}</svg>`
+/** 세션 칸 머리글: 상태 글자, 뜻 색, 시간. 색은 앱 테마의 뜻 색이라 어두운 테마도 따라간다 (결재함 틀, 2026-11-16 사용자 결정 B안). */
+export type Head = { label: string; color: 'error' | 'warning' | 'success' | 'suggestion' | undefined; time: string; dim: boolean }
 
-const SW = 92 // 상태바 이미지 폭
-const SH = 32 // 고양이 아바타와 같은 높이: 이름 | 상태바 | 이 세션 이 한 줄에 놓인다
-
-/** 상태바: 위에 상태 글자(+짧은 시간), 아래에 점점 채워지는 얇은 막대와 done/total. 끝에 현재 위치 동그라미. */
-export function infoSvg(r: Rec, g: Mood, now: number): { svg: string; h: number } {
-  const s = SKIN[g]
+/** 칸의 머리글을 정한다. 작업 목록이 있으면 시간 뒤에 단계(3/7 단계)를 붙인다. */
+export function headOf(r: Rec, g: Mood, now: number): Head {
   const ask = openAsk(r)
   const report = openReport(r)
-  const since = (at: number): Run => ({ t: ` ${fmtDur(now - at)}`, fill: C.dim })
-  const label: Run[] = isDead(r, now)
-    ? [{ t: deadLabel(r), fill: C.dim, weight: 700 }, ...(ask || report ? [since((ask ?? report)!.at)] : [])]
-    : g === 'request' || g === 'notice'
-      ? r.state === 'waiting'
-        ? [{ t: `${r.waitFor ?? '응답'} 대기`, fill: s.text, weight: 700 }, since(r.since)]
-        : [{ t: `${KIND_LABEL[g]}${ask && now - ask.at > OLD_ASK_MS ? ' 낡음' : ''}`, fill: s.text, weight: 700 }, since(ask?.at ?? r.since)]
-      : g === 'report'
-        ? [{ t: '확인', fill: s.text, weight: 700 }, since(report?.at ?? r.since)]
-        : g === 'running'
-          ? [{ t: '작업 중', fill: s.text, weight: 700 }, ...(r.turnStartedAt !== null ? [{ t: ` ${fmtDur(now - r.turnStartedAt)}`, fill: C.dim }] : [])]
-          : [{ t: '쉬는 중', fill: C.dim, weight: 700 }, since(r.since)]
-  // 폭을 넘으면 시간(뒤 조각)부터 뺀다.
-  const fitted = label.length > 1 && label.reduce((n, x) => n + tw(x.t, 11), 0) > SW ? label.slice(0, 1) : label
-  // 오른쪽 끝에 맞춘다: 상태 글자 길이가 달라도 시간이 줄마다 같은 자리에서 끝난다
-  const parts: string[] = [rs(fitted.length === 1 ? [{ ...fitted[0], t: clip(fitted[0].t, SW, 11) }] : fitted, SW, r.total > 0 ? 12 : 20, 11, 'end')]
-  if (r.total > 0) {
-    const room = 52
-    const y = 19
-    const live = g !== 'idle' && r.done < r.total
-    // 끝낸 만큼 채운다. 0단계여도 시작했음이 보이도록 작은 끝부분을 채우고, 끝에는 현재 위치 동그라미를 단다.
-    const fill = r.done > 0 ? Math.max(5, Math.round((room * Math.min(r.done, r.total)) / r.total)) : live ? 5 : 0
-    parts.push(`<rect x="0" y="${y}" width="${room}" height="4" rx="2" fill="${DOT}"/>`)
-    if (fill > 0) parts.push(`<rect x="0" y="${y}" width="${fill}" height="4" rx="2" fill="${s.bead}"/>`)
-    if (live) parts.push(`<circle cx="${Math.max(3.5, fill)}" cy="${y + 2}" r="3.5" fill="${C.white}" stroke="${s.bead}" stroke-width="1.5"/>`)
-    parts.push(rs([{ t: `${r.done}/${r.total}`, fill: C.dim, mono: true }], SW, y + 5, 10.5, 'end'))
+  const dur = (at: number) => fmtDur(now - at)
+  const steps = r.total > 0 ? ` · ${r.done}/${r.total} 단계` : ''
+  if (isDead(r, now)) return { label: deadLabel(r), color: undefined, time: ask || report ? dur((ask ?? report)!.at) : '', dim: true }
+  if (g === 'request' || g === 'notice') {
+    const color = g === 'request' ? 'error' : 'warning'
+    if (r.state === 'waiting') return { label: `${r.waitFor ?? '응답'} 대기`, color, time: dur(r.since) + steps, dim: false }
+    return { label: `${KIND_LABEL[g]}${ask && now - ask.at > OLD_ASK_MS ? ' 낡음' : ''}`, color, time: dur(ask?.at ?? r.since) + steps, dim: false }
   }
-  return { svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${SW}" height="${SH}" viewBox="0 0 ${SW} ${SH}">${parts.join('')}</svg>`, h: SH }
+  if (g === 'report') return { label: '확인', color: 'success', time: dur(report?.at ?? r.since) + steps, dim: false }
+  if (g === 'running') return { label: '작업 중', color: 'suggestion', time: (r.turnStartedAt !== null ? dur(r.turnStartedAt) : '') + steps, dim: false }
+  return { label: '쉬는 중', color: undefined, time: dur(r.since) + steps, dim: true }
 }
 
-/** 줄 사이 구분선. 폭을 안 주면 이미지가 패널 폭에 맞춰져 상자 끝까지 닿는다(높이는 비율대로 약 6px 이하라 선은 가늘다). */
-const hairline = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 8"><rect y="3.5" width="600" height="1" fill="${C.line}"/></svg>`
-
-export { BW, C, SH, SKIN, SW, clip, hairline, headSvg, mePill }
+export { C, SKIN, clip }
 export type { Mood }

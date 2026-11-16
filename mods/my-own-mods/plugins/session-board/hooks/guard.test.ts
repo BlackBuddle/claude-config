@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { classify, corruptReason, draw, measure } from './register'
+import { classify, corruptReason, draw, measure } from './guard'
 
 // 요소 생성기를 그대로 돌려주는 가짜 표: 그리는 함수가 어떤 글자를 내는지만 본다.
 const fake = { Box: (p: any) => p, Text: (p: any) => p, Button: (p: any) => p }
