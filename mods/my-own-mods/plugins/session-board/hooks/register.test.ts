@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { applyPlan, appLink, avatarSvg, badges, barSvg, fmtDur, groupOf, headOf, parseRec, nameWidth, progress, projectSlug, titleOf, transcriptTitle, type Rec } from './register'
+import { applyPlan, appLink, avatarSvg, badges, barSvg, delPath, fmtDur, groupOf, headOf, parseRec, nameWidth, progress, projectSlug, titleOf, transcriptTitle, type Rec } from './register'
 
 const NOW = 1_000_000_000_000
 const rec = (p: Partial<Rec> = {}): Rec => ({ id: 's1', name: '프로젝트', state: 'idle', since: NOW, turnStartedAt: null, waitFor: null, done: 0, total: 0, step: '', updatedAt: NOW, appId: null, title: '', root: '', ask: null, report: null, askClosedAt: 0, reportClosedAt: 0, ...p })
@@ -694,6 +694,23 @@ test('검토 고침: 세션을 다시 열어도 이미 확인한 확인 줄은 �
   const mine = JSON.parse(files['me.json']!)
   expect(mine.ask).toMatchObject({ kind: 'request', question: '푸시하는가?' })
   expect(mine.report).toEqual({ lines: ['시험 통과'], at: 10 }) // 닫힌 그대로다
+})
+
+test('점검 고침: cmd 의 del 에는 안전한 글자로만 된 경로만 넘긴다 (명령 주입 방지)', () => {
+  expect(delPath('C:/home/.claude/session-board', 'abc-1.json')).toBe(String.raw`C:\home\.claude\session-board\abc-1.json`)
+  expect(delPath('C:/home/.claude/session-board', 'x&calc.json')).toBeNull()
+  expect(delPath('C:/home/.claude/session-board', 'a|b.json')).toBeNull()
+  expect(delPath('C:/home/.claude/session-board', 'a%PATH%.json')).toBeNull()
+  expect(delPath('C:/home/.claude/session-board', 'a.txt')).toBeNull() // 기록 파일(.json)만
+  expect(delPath('C:/ho&me/.claude/session-board', 'a.json')).toBeNull() // 폴더 경로도 본다
+})
+
+test('점검 고침: 하루 넘은 정리도 위험한 글자가 든 이름은 지우지 않는다', async ($, on) => {
+  const day = 24 * 60 * 60 * 1000
+  const seen = fakeBoard(on, { 'x&calc.json': '{ broken', 'ok.json': '{ broken' }, 2 * day)
+  await $.session.start(START)
+  const deleted = seen.ran.filter(a => a[2] === 'del').map(a => a.at(-1)!.split('\\').pop())
+  expect(deleted).toEqual(['ok.json'])
 })
 
 test('검토 고침: 하루 넘은 파일 정리는 열린 결재·확인이 있는 파일을 7일까지 남긴다', async ($, on) => {
