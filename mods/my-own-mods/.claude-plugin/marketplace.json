@@ -4,31 +4,17 @@
   "metadata": { "description": "릴레이형 작업(설계, 구현, 리뷰, 인계)을 위한 Claude Code 모드, 스킬, 에이전트." },
   "plugins": [
     {
-      "name": "edit-guard",
-      "source": "./plugins/edit-guard",
-      "description": "Mod: 파일을 깨뜨리는 sed/heredoc 치환 명령은 막고, 위험한 삭제·git 명령은 영향 범위를 보여주고 진행/취소를 묻습니다.",
-      "version": "0.1.2",
+      "name": "session-board",
+      "source": "./plugins/session-board",
+      "description": "Mod: 오른쪽 패널 하나에 세션 상태와 결재·알림·확인, 하위 에이전트, 위험 명령 확인 카드(옛 edit-guard)를 모아 보여줍니다. 입력창 위 결재·알림 단추로 패널을 엽니다.",
+      "version": "0.4.0",
       "category": "mod"
     },
     {
       "name": "relay-band",
       "source": "./plugins/relay-band",
-      "description": "Mod: 입력창 위 한 줄 띠. 검증 결과, 자식 에이전트 수, 컨텍스트, 주간 한도와 오늘 권장량, 캐시 등을 보여줍니다.",
-      "version": "0.1.1",
-      "category": "mod"
-    },
-    {
-      "name": "agent-panel",
-      "source": "./plugins/agent-panel",
-      "description": "Mod: 실행 중인 하위 에이전트를 옆 패널에 보여줍니다.",
-      "version": "0.1.1",
-      "category": "mod"
-    },
-    {
-      "name": "session-board",
-      "source": "./plugins/session-board",
-      "description": "Mod: 여러 세션의 상태를 오른쪽 패널에 모아 보여줍니다. 진행 중 / 응답 대기 / 완료, 세션별 진척도 뱃지.",
-      "version": "0.1.4",
+      "description": "Mod: 입력창 위 한 줄 띠. 검증 결과, 하위 에이전트 수, 컨텍스트, 주간 한도와 오늘 권장량, 캐시 등을 보여줍니다.",
+      "version": "0.1.2",
       "category": "mod"
     },
     {
