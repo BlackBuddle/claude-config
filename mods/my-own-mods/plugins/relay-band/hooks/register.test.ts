@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { bandSvg, barsOf, dailyBudget, detailRows, fit, gauge, panelSvg } from './register'
+import { asksText, bandSvg, barsOf, countBoard, dailyBudget, detailRows, fit, gauge, panelSvg } from './register'
 
 // 시안 3번과 같은 상태: 컨텍스트 31%, 주 15%(오늘 7/19%p), 턴 11초
 const sample: any = {
@@ -176,4 +176,47 @@ test('데스크톱 띠는 밴드 이미지와 상세 버튼을 그리고 아래 
   expect((await ui.find({ type: 'Text', text: /ponytail 띠/ }))?.text).toBe('ponytail 띠')
   expect(await ui.find({ type: 'Button' })).toBeTruthy()
   await ui.unmount()
+})
+
+// ---- 사용자를 기다리는 세션 수 (session-board 의 기록 폴더에서 센다) ----
+const NOW = 1_000_000_000_000
+const rec = (p: object) => JSON.stringify({ state: 'idle', updatedAt: NOW, ...p })
+const ASK = (kind: string, at = NOW - 1000) => ({ kind, question: 'q', background: [], options: [], at })
+
+test('기다리는 세션을 센다: 결재·알림·권한 승인 대기·확인. 진행 중, 끝난 세션, 닫은 칸, 깨진 파일은 세지 않는다', () => {
+  const texts = [
+    rec({ ask: ASK('request') }),
+    rec({ ask: ASK('request') }),
+    rec({ ask: ASK('notice') }),
+    rec({ state: 'waiting' }), // 권한 승인 대기는 알림과 합친다
+    rec({ report: { lines: ['a'], at: 1 } }),
+    rec({ state: 'running', ask: ASK('request') }), // 이미 답했다
+    rec({ state: 'ended', ask: ASK('request') }),
+    rec({ updatedAt: NOW - 91_000, ask: ASK('request') }), // 기록이 끊긴 세션
+    rec({ ask: ASK('request', 5), askClosedAt: 5 }), // 사용자가 닫았다
+    '{ not json',
+    'null',
+  ]
+  expect(countBoard(texts, NOW)).toEqual({ request: 2, notice: 2, report: 1 })
+  expect(countBoard([], NOW)).toEqual({ request: 0, notice: 0, report: 0 })
+})
+
+test('띠의 글은 0이 아닌 종류만 쓰고, 칸이 없으면 쓰지 않는다', () => {
+  expect(asksText({ request: 1, notice: 2, report: 0 })).toBe('결재 1 · 알림 2')
+  expect(asksText({ request: 0, notice: 0, report: 3 })).toBe('확인 3')
+  expect(asksText({ request: 0, notice: 0, report: 0 })).toBeNull()
+})
+
+test('밴드는 기다리는 세션이 있을 때만 결재·알림·확인 칸을 그리고, 좁아도 숨기지 않는다', () => {
+  expect(bandSvg(sample, 2000).svg).not.toContain('결재')
+  const svg = bandSvg({ ...sample, asks: { request: 1, notice: 2, report: 3 } }, 2000).svg
+  for (const word of ['결재', '알림', '확인']) expect(svg).toContain(`>${word} </tspan>`)
+  expect(svg).toContain('fill="#FFE4E8"') // 결재는 빨강 알약
+  expect(bandSvg({ ...sample, asks: { request: 1, notice: 0, report: 0 } }, 100).svg).toContain('>결재 </tspan>')
+  expect(bandSvg({ ...sample, asks: { request: 0, notice: 0, report: 0 } }, 2000).svg).not.toContain('결재')
+})
+
+test('터미널 띠 글자 칸에도 개수가 들어가고, 이상 칸이라 좁아도 남는다', () => {
+  const segs = [{ prio: 0, value: '✗ 결재 1 · 알림 2', level: 'err' as const }, { prio: 2, label: '하위', value: '0', level: 'mute' as const }, { prio: 9, label: '페이스', value: '+1%p 앞섬', level: 'mute' as const }]
+  expect(fit(segs, 24).map(s => s.prio)).toContain(0)
 })

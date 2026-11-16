@@ -3,7 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import { applyPlan, appLink, avatarSvg, badges, barSvg, fmtDur, groupOf, infoSvg, parseRec, progress, type Rec } from './register'
 
 const NOW = 1_000_000_000_000
-const rec = (p: Partial<Rec> = {}): Rec => ({ id: 's1', name: '프로젝트', state: 'idle', since: NOW, turnStartedAt: null, waitFor: null, done: 0, total: 0, step: '', updatedAt: NOW, appId: null, ...p })
+const rec = (p: Partial<Rec> = {}): Rec => ({ id: 's1', name: '프로젝트', state: 'idle', since: NOW, turnStartedAt: null, waitFor: null, done: 0, total: 0, step: '', updatedAt: NOW, appId: null, root: '', ask: null, report: null, askClosedAt: 0, reportClosedAt: 0, ...p })
 
 test('상태바는 상태 글자와 점점 채워지는 막대를 한 덩어리(아바타 높이)로 그리고, 작업 목록이 없으면 막대를 그리지 않는다', () => {
   const run = infoSvg(rec({ state: 'running', turnStartedAt: NOW - 252_000, done: 3, total: 7, step: '시험 작성' }), 'running', NOW)
@@ -23,7 +23,7 @@ test('상태바는 상태 글자와 점점 채워지는 막대를 한 덩어리(
   expect(idleDone.svg).toContain('> 11초</tspan>')
   expect(idleDone.svg).not.toContain('<circle')
 
-  const wait = infoSvg(rec({ state: 'waiting', waitFor: 'Bash 승인', since: NOW - 65_000 }), 'waiting', NOW)
+  const wait = infoSvg(rec({ state: 'waiting', waitFor: 'Bash 승인', since: NOW - 65_000 }), 'notice', NOW)
   expect(wait.svg).toContain('>Bash 승인 대기</tspan>') // 폭이 모자라면 시간은 빠지고 상태 글자는 남는다
   expect(wait.svg).not.toContain('rx="2"') // 작업 목록이 없다
   expect(wait.svg).not.toContain('0/0')
@@ -31,7 +31,7 @@ test('상태바는 상태 글자와 점점 채워지는 막대를 한 덩어리(
 
 test('고양이 아바타는 상태마다 다르고, 앱 링크는 앱 세션 번호로 만든다', () => {
   expect(avatarSvg('running')).toContain('use href="#run"')
-  expect(avatarSvg('waiting')).toContain('use href="#flag"')
+  for (const g of ['request', 'notice', 'report'] as const) expect(avatarSvg(g)).toContain('use href="#flag"') // 사용자를 기다리는 세 묶음은 깃발 든 고양이
   expect(avatarSvg('idle')).toContain('use href="#zz"')
   expect(avatarSvg('running')).not.toContain('id="flag"') // 필요한 고양이 하나만 담는다
   expect(appLink(rec({ appId: 'local_abc-123' }))).toBe('claude://claude.ai/epitaxy/local_abc-123')
@@ -59,7 +59,7 @@ test('90초 넘게 기록이 없거나 끝난 세션은 숨긴다', () => {
   expect(groupOf(rec({ state: 'running' }), NOW + 89_000)).toBe('running')
   expect(groupOf(rec({ state: 'running' }), NOW + 91_000)).toBe('hidden')
   expect(groupOf(rec({ state: 'ended' }), NOW)).toBe('hidden')
-  expect(groupOf(rec({ state: 'waiting' }), NOW)).toBe('waiting')
+  expect(groupOf(rec({ state: 'waiting' }), NOW)).toBe('notice') // 권한 승인 대기는 알림과 합친다
 })
 
 test('뱃지는 진척도, 경과 시간, 대기 사유를 담는다', () => {
@@ -188,8 +188,9 @@ test('내 상태를 파일에 쓰고, 패널은 다른 세션 기록과 함께 �
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'session-board', component: 'Pane', requestId: 'session-board', props: { title: '세션', isFocused: false, bodyColumns: 60, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} }, surface } as any)
     if (surface === 'terminal') {
-      const found = await Promise.all([/다른 프로젝트/, /2\/5 단계/, /1\/3 단계/, /지금: 시험 실행/].map(async text => (await ui.find({ type: 'Text', text }))?.text !== undefined))
-      expect([surface, ...found]).toEqual([surface, true, true, true, true])
+      const found = await Promise.all([/2\/5 단계/, /1\/3 단계/, /지금: 시험 실행/].map(async text => (await ui.find({ type: 'Text', text }))?.text !== undefined))
+      expect([surface, ...found]).toEqual([surface, true, true, true])
+      expect(await ui.find({ type: 'Button', text: /다른 프로젝트/ })).toBeTruthy() // 이름은 누르면 펴지는 단추다
     } else {
       // 데스크톱은 카드를 이미지 한 장으로 그린다. 이미지 안의 글자는 infoSvg 시험이 지킨다.
       expect(await ui.find({ type: 'Svg' })).toBeTruthy()
@@ -281,12 +282,213 @@ test('세션을 열면 패널이 같이 열리고, 접기를 누르면 좁은 �
   expect(opens[1].columns).toBe(16)
   expect(stored).toEqual([true])
   // 접으면 묶음 카드 대신 개수 알약만 남는다
-  expect((await ui.find({ type: 'Text', text: /대기 1/ }))?.text).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /알림 1/ }))?.text).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /대기 중/ })).toBeUndefined()
 
   // 펼치기: 다시 기본 너비
   await ui.press({ key: 'fold-btn' })
   expect(opens[2].columns).toBe(40)
   expect(stored).toEqual([true, false])
+  await ui.unmount()
+})
+
+// ---- 결재함 기능 이식 ----------------------------------------------------------------
+type On = Parameters<Extract<Parameters<typeof test>[1], (...args: never[]) => unknown>>[1]
+const PANE = { title: '세션', isFocused: false, bodyColumns: 60, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} }
+const START = { cwd: '/', surface: 'desktop', isInteractive: true } as const
+const LIVE = () => Date.now()
+const file = (id: string, p: Partial<Rec> = {}) => JSON.stringify(rec({ id, name: `세션-${id}`, updatedAt: LIVE(), since: LIVE(), appId: 'local_ab-12', ...p }))
+
+// 가짜 기록 폴더: 파일 내용과 수정 시각을 바꾸는 쓰기, 실행한 명령과 알림을 모은다
+function fakeBoard(on: On, files: Record<string, string>) {
+  let clock = 1
+  const t0 = Date.now() // 수정 시각이 너무 옛날이면 세션 시작 때의 정리가 파일을 지운다
+  const mtimes: Record<string, number> = Object.fromEntries(Object.keys(files).map(f => [f, t0]))
+  const seen = { ran: [] as string[][], toasts: [] as string[], opens: 0 }
+  const base = (p: unknown) => String(p).replaceAll('\\', '/').split('/').pop() ?? ''
+  on('env.get', (_, e: any) => ({ value: e.name === 'CLAUDE_CODE_HOST_SESSION_ID' ? 'local_me-1' : e.name === 'CLAUDE_CODE_SESSION_ID' ? undefined : 'C:/home' }) as any)
+  on('session.cwd', () => ({ value: 'C:/work/p' }))
+  on('session.id', () => ({ value: 'me' }))
+  on('session.root', () => ({ value: 'C:/work/p' }))
+  on('session.messages', () => ({ value: [] }) as any)
+  on('clock.now', () => ({ value: Date.now() }))
+  on('clock.every', () => ({ value: {} }) as any)
+  on('command.register', () => ({ value: { command: 'session_board' } }))
+  on('store.get', () => ({ value: undefined }))
+  on('ui.open', () => {
+    seen.opens += 1
+    return { value: { isPlaced: true } }
+  })
+  on('ui.toast', (_, e: any) => {
+    seen.toasts.push(e.text)
+    return { value: {} } as any
+  })
+  on('fs.list', () => ({ value: Object.keys(files).map(f => ({ name: f, kind: 'file', size: 1, mtimeMs: mtimes[f] ?? 0, isLink: false })) }) as any)
+  on('fs.read', (_, e: any) => ({ value: files[base(e.path)] }) as any)
+  on('fs.write', (_, e: any) => {
+    files[base(e.path)] = e.text
+    mtimes[base(e.path)] = t0 + ++clock
+    return { value: undefined } as any
+  })
+  on('process.run', (_, e: any) => {
+    if (e.argv[0] === 'rundll32' || e.argv[0] === 'cmd') seen.ran.push([...e.argv])
+    return { value: { exitCode: 0, stdout: '', stderr: '' } } as any
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('tool.call', () => ({ result: {} }))
+  on('prompt.submit', (_, e: any) => ({ text: e.text }))
+  on('turn.complete', (_, e: any) => ({ text: e.answer }))
+  return seen
+}
+
+const turnOf = ($: any) => (answer: string) => $.turn.complete({ answer, reason: 'answer', durationMs: 1, isAborted: false, turnId: 't' } as any)
+const mount = ($: any, surface: 'desktop' | 'terminal' = 'desktop') => $.ui.mount({ plugin: 'session-board', component: 'Pane', requestId: 'session-board', props: PANE, surface } as any)
+
+test('턴 끝 판정: 결재·알림이 이 세션의 기록이 되고, 신호 없는 사용자 턴은 닫는다', async ($, on) => {
+  const files: Record<string, string> = {}
+  fakeBoard(on, files)
+  await $.session.start(START)
+  const turn = turnOf($)
+  const mine = () => JSON.parse(files['me.json'] ?? '{}')
+
+  await turn('보고.\n결재: DB를 바꾼다\n결재: 표가 3개다')
+  expect(mine()).toMatchObject({ state: 'idle', ask: { kind: 'request', question: 'DB를 바꾼다', background: ['표가 3개다'] }, appId: 'local_me-1' })
+
+  await $.prompt.submit({ text: '바꿔', origin: { kind: 'composer' } } as any)
+  await turn('알림: 노력 수준을 high로 바꾼다')
+  expect(mine().ask).toMatchObject({ kind: 'notice' })
+
+  await $.prompt.submit({ text: '바꿨다', origin: { kind: 'composer' } } as any)
+  await turn('확인: 시험 통과\n끝냈다.')
+  expect(mine().ask).toBeNull() // 신호 없이 끝난 사용자 턴은 닫는다
+  expect(mine().report).toMatchObject({ lines: ['시험 통과'] }) // 확인은 눌러야 닫힌다
+
+  // 작업 알림이 낀 턴은 사용자의 답이 아니다: 칸을 닫지 않는다
+  await turn('결재: 또 묻는다')
+  await $.prompt.submit({ text: '작업 알림', origin: { kind: 'task-notification' } } as any)
+  await turn('진행했다.')
+  expect(mine().ask).toMatchObject({ question: '또 묻는다' })
+})
+
+test('이름을 누르면 펴지고, 이동 단추는 결재함 방식(rundll32)으로 그 세션을 연다', async ($, on) => {
+  const files = { 'other.json': file('other', { ask: { kind: 'request', question: '방식을 고르는가?', background: ['배경 1', '배경 2', '배경 3'], options: ['A', 'B'], at: LIVE() } }) }
+  const seen = fakeBoard(on, files)
+  await $.session.start(START)
+  const ui = await mount($)
+  expect(await ui.find({ key: 'go:other' })).toBeFalsy() // 접힌 줄에는 이동 단추가 없다
+  await ui.press({ key: 'nm:other' })
+  expect((await ui.find({ type: 'Text', text: /방식을 고르는가/ }))?.text).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /배경 2/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /배경 3/ })).toBeFalsy() // 배경은 2줄까지
+  expect((await ui.find({ type: 'Text', text: /① A {2}② B/ }))?.text).toBeDefined() // 선택지 1줄
+  await ui.press({ key: 'go:other' })
+  expect(seen.ran).toEqual([['rundll32', 'url.dll,FileProtocolHandler', 'claude://claude.ai/epitaxy/local_ab-12']])
+  await ui.press({ key: 'nm:other' }) // 같은 줄을 다시 누르면 접힌다
+  expect(await ui.find({ key: 'go:other' })).toBeFalsy()
+  await ui.unmount()
+})
+
+test('앱 번호 모양이 틀리면 이동 단추를 두지 않는다 (명령 주입 방지)', async ($, on) => {
+  const seen = fakeBoard(on, { 'bad.json': file('bad', { appId: 'local_x & calc', ask: { kind: 'notice', question: 'q', background: [], options: [], at: LIVE() } }) })
+  await $.session.start(START)
+  const ui = await mount($)
+  await ui.press({ key: 'nm:bad' })
+  expect(await ui.find({ key: 'go:bad' })).toBeFalsy()
+  expect((await ui.find({ type: 'Text', text: /이동이 안 된다/ }))?.text).toBeDefined()
+  expect(seen.ran).toEqual([])
+  await ui.unmount()
+})
+
+test('닫기: 알림·낡은 결재·끝난 세션에 있고, 살아 있는 새 결재에는 없다. 누르면 닫은 시각을 쓴다', async ($, on) => {
+  const at = LIVE()
+  const day = 24 * 60 * 60 * 1000
+  const files: Record<string, string> = {
+    'fresh.json': file('fresh', { ask: { kind: 'request', question: '새 결재', background: [], options: [], at } }),
+    'old.json': file('old', { ask: { kind: 'request', question: '낡은 결재', background: [], options: [], at: at - day - 1000 } }),
+    'dead.json': file('dead', { state: 'ended', ask: { kind: 'request', question: '끝난 세션의 결재', background: [], options: [], at } }),
+    'note.json': file('note', { ask: { kind: 'notice', question: '알림', background: [], options: [], at } }),
+  }
+  fakeBoard(on, files)
+  await $.session.start(START)
+  const ui = await mount($)
+  for (const id of ['fresh', 'old', 'dead', 'note']) await ui.press({ key: `nm:${id}` }) // 줄마다 따로 펴려면 하나씩 펴고 확인한다
+  // 한 번에 하나만 펴진다: 마지막으로 편 note 만 보인다
+  expect(await ui.find({ key: 'close:note' })).toBeTruthy()
+  for (const [id, hasClose] of [['fresh', false], ['old', true], ['dead', true]] as const) {
+    await ui.press({ key: `nm:${id}` })
+    expect([id, !!(await ui.find({ key: `close:${id}` }))]).toEqual([id, hasClose])
+  }
+  await ui.press({ key: 'close:dead' })
+  expect(JSON.parse(files['dead.json']!).askClosedAt).toBeGreaterThanOrEqual(at)
+  expect(await ui.find({ type: 'Text', text: /끝난 세션의 결재/ })).toBeFalsy() // 닫으면 칸이 사라진다
+  await ui.unmount()
+})
+
+test('확인(초록)을 누르면 확인 칸만 닫는다. 2개 이상이면 모두 확인이 있다', async ($, on) => {
+  const at = LIVE()
+  const files: Record<string, string> = {
+    'r1.json': file('r1', { report: { lines: ['a 끝'], at } }),
+    'r2.json': file('r2', { report: { lines: ['b 끝'], at } }),
+    'r3.json': file('r3', { report: { lines: ['c 끝'], at }, ask: { kind: 'notice', question: '같이 있는 알림', background: [], options: [], at } }),
+  }
+  fakeBoard(on, files)
+  await $.session.start(START)
+  const ui = await mount($)
+  expect(await ui.find({ type: 'Button', text: /2개 모두 확인/ })).toBeTruthy()
+  await ui.press({ key: 'nm:r2' })
+  await ui.press({ key: 'ack:r2' })
+  expect(JSON.parse(files['r2.json']!).reportClosedAt).toBeGreaterThanOrEqual(at)
+  await ui.press({ key: 'nm:r3' })
+  await ui.press({ key: 'ack:r3' })
+  expect(JSON.parse(files['r3.json']!)).toMatchObject({ ask: { question: '같이 있는 알림' } }) // 알림은 그대로
+  expect(JSON.parse(files['r3.json']!).reportClosedAt).toBeGreaterThan(0)
+  expect(JSON.parse(files['r3.json']!).askClosedAt).toBe(0)
+  await ui.unmount()
+})
+
+test('같은 프로젝트의 새 결재가 오면 패널을 열고 토스트로 알린다. 같은 결재는 한 번만이다', async ($, on) => {
+  const at = LIVE()
+  const files: Record<string, string> = { 'a.json': file('a', { root: 'c:/work/p', ask: { kind: 'request', question: '결재', background: [], options: [], at } }), 'z.json': file('z', { root: 'c:/other', ask: { kind: 'request', question: '다른 프로젝트', background: [], options: [], at } }) }
+  const seen = fakeBoard(on, files)
+  await $.session.start(START)
+  await new Promise(r => setTimeout(r, 10)) // 토스트는 기다리지 않고 부른다
+  expect(seen.toasts).toEqual(['세션 보드에 결재·알림 1개가 왔다']) // 다른 프로젝트는 알리지 않는다
+  const opens = seen.opens
+  await $.session.start(START) // 다시 읽어도 같은 결재로 또 열지 않는다
+  await new Promise(r => setTimeout(r, 10))
+  expect(seen.toasts.length).toBe(1)
+  expect(seen.opens).toBe(opens + 1) // 시작 때의 열기 1번만
+})
+
+test('내 기록을 다시 쓸 때 다른 세션의 패널이 쓴 닫은 시각을 잃지 않는다', async ($, on) => {
+  const files: Record<string, string> = {}
+  fakeBoard(on, files)
+  await $.session.start(START)
+  files['me.json'] = JSON.stringify({ ...JSON.parse(files['me.json']!), askClosedAt: 777, reportClosedAt: 555 })
+  await $.tool.call({ tool: 'TodoWrite', todos: [] } as any)
+  expect(JSON.parse(files['me.json']!)).toMatchObject({ askClosedAt: 777, reportClosedAt: 555 })
+})
+
+test('세션 끝: 사용자가 끝내면 결재·알림을 닫고, 앱 종료는 칸을 남긴다', async ($, on) => {
+  const files: Record<string, string> = {}
+  fakeBoard(on, files)
+  on('session.end', (_, e: any) => ({ sessionId: e.sessionId }))
+  await $.session.start(START)
+  await turnOf($)('결재: 남는가?\n확인: 끝')
+  await $.session.end({ sessionId: 'me', reason: 'other' } as any)
+  expect(JSON.parse(files['me.json']!)).toMatchObject({ state: 'ended', ask: { question: '남는가?' } })
+  await $.session.start(START) // 다시 열면 칸을 이어받는다
+  expect(JSON.parse(files['me.json']!)).toMatchObject({ ask: { question: '남는가?' }, report: { lines: ['끝'] } })
+  await $.session.end({ sessionId: 'me', reason: 'prompt_input_exit' } as any)
+  expect(JSON.parse(files['me.json']!)).toMatchObject({ state: 'ended', ask: null, report: { lines: ['끝'] } }) // 확인은 눌러야 닫힌다
+})
+
+test('읽지 못한 기록 파일은 오류 줄로 보이고 닫기로 지운다', async ($, on) => {
+  const seen = fakeBoard(on, { 'broken.json': '{ not json' })
+  await $.session.start(START)
+  const ui = await mount($)
+  expect((await ui.find({ type: 'Text', text: /읽지 못했다: broken\.json/ }))?.text).toBeDefined()
+  await ui.press({ key: 'x:broken.json' })
+  expect(seen.ran.at(-1)?.slice(0, 3)).toEqual(['cmd', '/c', 'del'])
   await ui.unmount()
 })
