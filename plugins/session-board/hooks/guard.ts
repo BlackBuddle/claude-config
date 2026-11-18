@@ -102,12 +102,7 @@ async function guard($: any, e: any, next: any, tool: 'Bash' | 'PowerShell') {
 
     // 결정은 엔진의 선택 카드로 받는다. 패널 카드는 원격 화면(휴대폰, claude.ai)에 안 그려져 답을 못 받았다 (2026-11-18 사용자 결정)
     // 일반 선택 카드처럼 답할 때까지 기다린다. 진행 단추를 정확히 고를 때만 실행한다. 닫거나 다른 글을 쓰면 취소다
-    const ask = askOf(risk, mine.report)
-    try {
-      mine.decision = (await $.ui.ask(ask.question, { options: ask.options, header: '위험 명령' })) === ask.proceed ? 'proceed' : 'cancel'
-    } catch {
-      mine.decision = next.signal?.aborted ? 'interrupted' : 'cancel'
-    }
+    mine.decision = await decide($, next, askOf(risk, mine.report))
   } catch {
     // 중단이면 interrupted, 그 밖의 예외는 안전하게 거부한다.
     mine.decision = next.signal?.aborted ? 'interrupted' : 'error'
@@ -129,6 +124,26 @@ async function guard($: any, e: any, next: any, tool: 'Bash' | 'PowerShell') {
     } as Record<string, string>)[mine.decision ?? ''] ?? '답이 기록되지 않았습니다'
   return {
     deny: `edit-guard: 이 명령을 붙잡아 실행하지 않았습니다 (${why}). ${unknown ? `영향 범위를 알 수 없었습니다 (${summary}${cause !== '' ? ` — ${cause}` : ''})` : `실행하면 ${summary}`}. 사용자가 요청하기 전에는 다시 시도하지 마세요.`,
+  }
+}
+
+/** 선택 카드의 답과 턴 중단을 함께 기다린다. 카드가 중단 때 끝나지 않아도 held 가 풀리게 한다 (안 풀리면 이후 위험 명령이 모두 멈춘다). */
+export async function decide($: any, next: any, ask: { question: string; options: string[]; proceed: string }): Promise<'proceed' | 'cancel' | 'interrupted'> {
+  let settled = false
+  const answered = $.ui
+    .ask(ask.question, { options: ask.options, header: '위험 명령' })
+    .then((a: string) => (a === ask.proceed ? 'proceed' : 'cancel'), () => (next.signal?.aborted ? 'interrupted' : 'cancel'))
+  const aborted = (async () => {
+    while (!settled) {
+      if (next.signal?.aborted) return 'interrupted' as const
+      await pause($)
+    }
+    return 'cancel' as const
+  })()
+  try {
+    return await Promise.race([answered, aborted])
+  } finally {
+    settled = true
   }
 }
 

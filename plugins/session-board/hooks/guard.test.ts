@@ -1,6 +1,23 @@
 import { expect, test } from 'claude-code/testing'
 
-import { askOf, classify, corruptReason, draw, measure } from './guard'
+import { askOf, classify, corruptReason, decide, draw, measure } from './guard'
+
+// 선택 카드의 답과 턴 중단을 함께 기다린다. 카드가 끝나지 않아도 중단되면 멈춘다 (2026-11-18 검토 지적)
+// 기다리기(pause)는 진짜처럼 시간이 걸려야 한다. 바로 끝나면 루프가 마이크로태스크만 돌아 중단 타이머가 못 돈다
+const fake$ = (answer: Promise<string>) => ({ ui: { ask: () => answer }, process: { run: () => new Promise(r => setTimeout(() => r({ stdout: '', stderr: '', exitCode: 0 }), 1)) } })
+const ask = { question: 'q', options: ['취소', '진행'], proceed: '진행' }
+
+test('선택 카드: 진행만 실행하고, 다른 답과 닫기는 취소다', async () => {
+  const never = new Promise<string>(() => undefined)
+  expect(await decide(fake$(Promise.resolve('진행')), { signal: { aborted: false } }, ask)).toBe('proceed')
+  expect(await decide(fake$(Promise.resolve('취소')), { signal: { aborted: false } }, ask)).toBe('cancel')
+  expect(await decide(fake$(Promise.resolve('진행할게')), { signal: { aborted: false } }, ask)).toBe('cancel')
+  expect(await decide(fake$(Promise.reject(new Error('dismissed'))), { signal: { aborted: false } }, ask)).toBe('cancel')
+  // 카드가 끝나지 않아도 턴이 중단되면 멈춘다
+  const signal = { aborted: false }
+  setTimeout(() => { signal.aborted = true }, 5)
+  expect(await decide(fake$(never), { signal }, ask)).toBe('interrupted')
+})
 
 // 요소 생성기를 그대로 돌려주는 가짜 표: 그리는 함수가 어떤 글자를 내는지만 본다.
 const fake = { Box: (p: any) => p, Text: (p: any) => p, Button: (p: any) => p }
