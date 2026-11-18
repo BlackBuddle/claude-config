@@ -56,6 +56,8 @@
 - 입력창 위 띠 자리를 [ponytail](https://github.com/DietrichGebert/ponytail)의 띠와 나눠 씁니다. 그 띠 아래에 붙고, 데스크톱 화면에서는 줄을 맞추려고 1칸 들여씁니다(코드 맨 위의 `INDENT`).
 - 비용 칸은 ponytail이 이미 보여줘서 기본으로 숨깁니다(`SHOW_COST`).
 - 주간 한도 칸은 계정이 `seven_day` 한도 값을 줄 때만 나옵니다.
+- 노력 수준 제안: Claude가 답에 "~ medium이 맞다", "~ medium이 필요하다", "필요 수준: medium"을 쓰고, 그 값이 지금 수준과 다르면 노란 `⚠ 수준 low→medium`이 뜹니다. 띠는 제안만 합니다. 수준은 사용자가 바꿉니다. 바꾸면 다음 요청부터 사라집니다.
+- 인계 단추: 컨텍스트가 50% 이상이면 `인계 ▸`가 뜹니다. 누르면 `/handoff`를 보냅니다 (`HANDOFF_AT`).
 
 </details>
 

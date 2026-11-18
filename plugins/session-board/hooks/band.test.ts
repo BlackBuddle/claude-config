@@ -1,6 +1,22 @@
 import { expect, test } from 'claude-code/testing'
 
-import { askPillSvg, asksText, bandCatSvg, bandSvg, barsOf, dailyBudget, detailRows, fit, gauge, panelSvg, runVerify } from './band'
+import { askPillSvg, asksText, bandCatSvg, bandSvg, barsOf, dailyBudget, detailRows, effortHint, fit, gauge, neededEffort, panelSvg, runVerify } from './band'
+
+test('답변에서 필요한 노력 수준을 읽는다', () => {
+  expect(neededEffort('Opus 기준으로는 한 단계 낮춘 **medium**이 맞다.')).toBe('medium')
+  expect(neededEffort('Opus 5.5 기준 노력 수준은 medium이 필요하다 (지금과 같다).')).toBe('medium')
+  expect(neededEffort('필요 수준: high')).toBe('high')
+  // 지금 수준만 말하거나 수준이 없는 답은 바꾸지 않는다
+  expect(neededEffort('노력 수준은 low다. 필요한 수준과 같다.')).toBe(null)
+  expect(neededEffort('커밋했다.')).toBe(null)
+})
+
+test('필요 수준과 지금 수준이 다를 때만 알약을 보인다', () => {
+  expect(effortHint('medium', 'low')).toBe('⚠ 수준 low→medium')
+  expect(effortHint('low', 'low')).toBe(null)
+  expect(effortHint(null, 'low')).toBe(null)
+  expect(effortHint('high', undefined)).toBe(null)
+})
 
 // 시안 3번과 같은 상태: 컨텍스트 31%, 주 15%(오늘 7/19%p), 턴 11초
 const sample: any = {
