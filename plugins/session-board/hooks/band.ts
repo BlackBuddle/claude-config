@@ -65,13 +65,15 @@ let effortNow: string | undefined // 이 세션 본 에이전트의 지금 수�
 let effortNeed: string | null = null // Claude 가 답에서 말한 필요한 수준. 새로 말할 때까지 남긴다
 // 컨텍스트가 이만큼 차면 띠에 "인계 ▸" 단추를 둔다. 세션을 짧게 끊고 HANDOFF.md 로 넘기는 규칙을 지키기 쉽게
 const HANDOFF_AT = 50
+let handoff: 'idle' | 'sent' | 'running' = 'idle' // 인계 단추가 보낸 /handoff 의 진행
+const showHandoff = () => handoff === 'idle' && (context?.percent ?? 0) >= HANDOFF_AT
 
 const LEVELS = 'low|medium|high|xhigh|max'
 // "~ medium이 맞다", "~ medium이 필요하다", "필요 수준: medium". 지금 수준만 말한 문장("노력 수준은 low다")은 읽지 않는다
-const NEED = new RegExp(`(?:\\b(${LEVELS})\\b\\s*(?:이|가)?\\s*(?:맞다|필요하다))|(?:필요 수준\\s*[:은는]?\\s*(${LEVELS})\\b)`)
-/** 답변에서 Claude 가 말한 필요한 노력 수준. 말하지 않았으면 null. */
+const NEED = new RegExp(`(?:\\b(${LEVELS})\\b\\s*(?:이|가)?\\s*(?:맞다|필요하다))|(?:필요 수준\\s*[:은는]?\\s*(${LEVELS})\\b)`, 'g')
+/** 답변에서 Claude 가 말한 필요한 노력 수준. 여럿이면 마지막(가장 최근 제안). 말하지 않았으면 null. */
 export function neededEffort(answer: string): string | null {
-  const m = answer.replace(/\*/g, '').match(NEED)
+  const m = [...answer.replace(/\*/g, '').matchAll(NEED)].at(-1)
   return m ? (m[1] ?? m[2]) : null
 }
 /** 필요 수준과 지금 수준이 다를 때만 알약 글자. */
@@ -107,9 +109,21 @@ export async function bandStart($: any) {
   $.ui.invalidate('ui.render')
 }
 
-/** 사용자가 입력했다: 턴 시간을 재기 시작한다. */
-export async function bandPrompt($: any) {
+/** 사용자가 입력했다: 턴 시간을 재기 시작한다. 인계 단추가 보낸 /handoff 가 시작되면 표시한다. */
+export async function bandPrompt($: any, e?: any) {
   turnStartedAt = await $.clock.now()
+  // 엔진이 명령을 펼쳐 넘겨도 알아보게, 플러그인이 보낸 프롬프트도 인정한다 (펼친 글은 /handoff 로 시작하지 않을 수 있다)
+  if (handoff === 'sent' && (e?.origin?.kind === 'plugin' || String(e?.text ?? '').trim().startsWith('/handoff'))) handoff = 'running'
+}
+
+/** 인계 단추: 한 번 누르면 그 /handoff 턴이 끝날 때까지 숨긴다. 작업 중에 누르면 줄을 서서 반응이 늦어 다시 누르기 쉽다 */
+function sendHandoff($: any) {
+  handoff = 'sent'
+  $.ui.invalidate('ui.render')
+  $.prompt.submit({ text: '/handoff' }).catch(() => {
+    handoff = 'idle'
+    $.ui.invalidate('ui.render')
+  })
 }
 
 /** 하위 에이전트가 시작했다: 하위 수를 다시 센다. */
@@ -121,6 +135,7 @@ export async function bandTick($: any) {
 export async function bandTurnDone($: any, e: any) {
   if (e.agentId) return
   effortNeed = neededEffort(String(e.answer ?? '')) ?? effortNeed
+  if (handoff === 'running') handoff = 'idle'
   const now = await $.clock.now()
   lastTurnSec = Math.round((now - turnStartedAt) / 1000)
   lastAnswerAt = now
@@ -183,8 +198,8 @@ export const register: Register = on => {
       // 고양이는 띠 그림에서 떼어 따로 그리고, 그 바로 옆에 누를 수 있는 개수 단추를 둔다 (2026-11-16 사용자 요청: 고양이 옆에 알림 숫자)
       const kinds = ASK_KINDS.filter(k => asks[k.key] > 0)
       const hint = effortHint(effortNeed, effortNow)
-      const handoff = (context?.percent ?? 0) >= HANDOFF_AT
-      const extraW = (hint ? tw(hint, 13) + 16 : 0) + (handoff ? 70 : 0)
+      const handoffShown = showHandoff()
+      const extraW = (hint ? tw(hint, 13) + 16 : 0) + (handoffShown ? 70 : 0)
       const band = bandSvg(d, Math.max(200, cols * 8 - 140 - indent * 16 - 40 - kinds.length * 45 - (kinds.length > 0 ? 20 : 0) - extraW), true)
       // 앱이 단추 안 글자색을 지운다. 그래서 색 점은 단추 밖의 글자로 둔다
       const askButtons = kinds.map(k => {
@@ -218,7 +233,7 @@ export const register: Register = on => {
           Box({ key: 'bandb', flexShrink: 1, minWidth: 0, children: [Svg({ key: 'band', source: band.svg, alt, ...sizeOf(band.svg) })] }),
           Box({ key: 'fill', flexGrow: 1 }),
           hint ? Box({ key: 'effortb', flexShrink: 0, alignItems: 'center', paddingRight: 1, children: [Text({ key: 'effort', color: 'warning', bold: true, children: hint })] }) : null,
-          handoff ? Box({ key: 'handoffb', flexShrink: 0, paddingRight: 1, children: [Button({ key: 'handoff', label: '인계 ▸', variant: 'secondary', onPress: () => void $.prompt.submit({ text: '/handoff' }) })] }) : null,
+          handoffShown ? Box({ key: 'handoffb', flexShrink: 0, paddingRight: 1, children: [Button({ key: 'handoff', label: '인계 ▸', variant: 'secondary', onPress: () => sendHandoff($) })] }) : null,
           Box({ key: 'detailb', flexShrink: 0, children: [Button({ key: 'detail', label: `상세 ${showDetail ? '▴' : '▾'}`, variant: 'secondary', onPress: () => { showDetail = !showDetail; $.ui.invalidate('ui.render') } })] }),
         ],
       })
@@ -261,7 +276,7 @@ export const register: Register = on => {
       children.push(Box({ key: `${key}fill`, flexGrow: 1 }))
       const hint = effortHint(effortNeed, effortNow)
       if (hint) children.push(Text({ key: `${key}effort`, color: 'warning', bold: true, children: `${hint} ` }))
-      if ((context?.percent ?? 0) >= HANDOFF_AT) children.push(Button({ key: `${key}handoff`, label: '인계 ▸', plain: true, dimColor: true, onPress: () => void $.prompt.submit({ text: '/handoff' }) }))
+      if (showHandoff()) children.push(Button({ key: `${key}handoff`, label: '인계 ▸', plain: true, dimColor: true, onPress: () => sendHandoff($) }))
       // 터미널: 패널이 닫혀 있으면 상세 앞에 여는 단추를 둔다
       if (isBoardClosed()) children.push(Button({ key: 'open-board', label: '세션 ▸', plain: true, dimColor: true, onPress: () => openBoard($) }))
       children.push(

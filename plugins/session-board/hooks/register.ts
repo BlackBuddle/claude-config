@@ -463,7 +463,7 @@ export const register: Register = (on, options) => {
     if (origin === undefined || USER_ORIGINS.has(origin)) isUserTurn = true
     // 새 세션의 첫 요청이 이름이 된다. 다른 세션이 보낸 지시도 첫 요청이면 이름이다(하위 세션은 그것이 할 일이다)
     if (me && me.title === '' && titleOf(e.text) !== '') await save($, { title: titleOf(e.text) })
-    await bandPrompt($) // 띠의 턴 시간
+    await bandPrompt($, e) // 띠의 턴 시간, 인계 단추
     return next(e)
   })
 

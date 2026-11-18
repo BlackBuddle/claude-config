@@ -9,6 +9,8 @@ test('답변에서 필요한 노력 수준을 읽는다', () => {
   // 지금 수준만 말하거나 수준이 없는 답은 바꾸지 않는다
   expect(neededEffort('노력 수준은 low다. 필요한 수준과 같다.')).toBe(null)
   expect(neededEffort('커밋했다.')).toBe(null)
+  // 한 답에 둘이면 마지막(가장 최근 제안, 보통 끝의 검토 제안)을 쓴다
+  expect(neededEffort('작업은 medium이 맞다.\n검토 제안: /ponytail-review. 노력 수준은 low가 필요하다.')).toBe('low')
 })
 
 test('필요 수준과 지금 수준이 다를 때만 알약을 보인다', () => {
