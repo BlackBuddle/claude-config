@@ -9,7 +9,7 @@
 | 이름 | 종류 | 나타나는 곳 | 하는 일 |
 |---|---|---|---|
 | [session-board](session-board) | 모드 | 오른쪽 패널, 입력창 위 한 줄 | 패널: 세션 상태와 사용자를 기다리는 결재·알림·확인(위), 실행 중인 하위 에이전트(가운데), 위험한 삭제·git 명령의 확인 카드(아래). 띠: 고양이 옆 결재·알림 개수 단추(누르면 패널), 검증 결과, 하위 에이전트 수, 컨텍스트, 주간 한도와 오늘 권장량, 턴 시간, 캐시. |
-| [relay-skills](relay-skills) | 스킬 | 직접 입력할 때만 | `/handoff`: 실행한 명령의 결과를 본 것만 "완료"로 적는 인계 문서(`HANDOFF.md`, 최신 1개). `/recall`: 지난 결정·작업을 결정 기록·HANDOFF·git·세션 기록에서 찾아 출처와 함께 답한다. `/ship`: 커밋·push 직전 점검표(원격 먼저, 비밀 정보, 테스트, 결정 기록, 문서). |
+| [relay-skills](relay-skills) | 스킬 | `/handoff`·`/ship`은 직접 입력할 때만, `/recall`은 지난 결정을 물을 때 자동으로도 | `/handoff`: 실행한 명령의 결과를 본 것만 "완료"로 적는 인계 문서(`HANDOFF.md`, 최신 1개). `/recall`: 지난 결정·작업을 결정 기록·HANDOFF·git·세션 기록에서 찾아 출처와 함께 답한다. `/ship`: 커밋·push 직전 점검표(원격 먼저, 비밀 정보, 테스트, 결정 기록, 문서). |
 | [superpowers-lite](superpowers-lite) | 스킬 | 상황이 맞을 때 자동 | obra/superpowers에서 4개만 남긴 사본: 브레인스토밍(결과는 `PLAN.md`), TDD, 체계적 디버깅, 완료 전 검증. 바꾼 곳은 그 폴더의 README. |
 | [relay-agents](relay-agents) | 에이전트 | 하위 에이전트 호출 | `relay-design`(Opus, high), `relay-build`(Opus, medium), `relay-review`(Opus, high). 모델과 노력 수준이 파일에 고정되어 상한선이 됩니다. |
 
@@ -19,7 +19,9 @@
 
 설치한 뒤 확인하는 방법:
 1. session-board: 세션을 열면 오른쪽에 패널이 열리고 입력창 위에 한 줄 띠가 보입니다. 위험한 삭제 명령을 시키면 패널 아래에 확인 카드가 붙습니다.
-2. relay-skills: `/handoff`가 자동 완성에 나옵니다.
+2. relay-skills: `/handoff`, `/ship`, `/recall`이 자동 완성에 나옵니다.
+3. superpowers-lite: `claude plugin list`에 `superpowers-lite@inline`이 보이고, 스킬 목록에 `superpowers-lite:brainstorming` 등 4개가 보입니다.
+4. relay-agents: 하위 에이전트 목록에 `relay-agents:relay-build` 등 3개가 보입니다.
 
 ## 먼저 알아 둘 것
 
@@ -59,7 +61,8 @@
 <details>
 <summary>relay-skills</summary>
 
-- 두 스킬은 사용자가 직접 입력할 때만 실행됩니다.
+- `/handoff`와 `/ship`은 사용자가 직접 입력할 때만 실행됩니다.
+- `/recall`은 직접 입력해도 되고, "그거 ~하기로 했잖아"처럼 지난 결정을 물으면 자동으로도 실행됩니다.
 
 </details>
 

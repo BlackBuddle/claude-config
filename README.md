@@ -81,7 +81,9 @@ git -C "$env:USERPROFILE\claude-config" pull; powershell -ExecutionPolicy Bypass
 
 끝난 뒤 Claude Code를 다시 시작한다. 자동으로 적용되지 않는다. 변경이 있을 때마다 이 명령을 실행한다.
 
-`-SkipPlugins`는 5단계(외부 플러그인 설치)만 건너뛴다. 환경 변수(6단계)는 항상 맞춘다. 내 플러그인 코드는 저장소 폴더를 직접 읽으므로 `git pull`만으로 갱신된다.
+주의: `git pull` 뒤에는 이 명령의 `setup.ps1`까지 꼭 실행한다. 폴더가 옮겨지면 환경 변수와 옛 폴더를 이 스크립트가 정리한다.
+
+`-SkipPlugins`는 5단계(외부 플러그인 설치)만 건너뛴다. 환경 변수(6단계)는 항상 맞춘다. 단 `-Target`을 다른 폴더로 준 시험 실행에서는 환경 변수를 바꾸지 않는다. 내 플러그인 코드는 저장소 폴더를 직접 읽으므로 `git pull`만으로 갱신된다.
 
 ## 4. 고친 설정을 저장소에 올린다
 

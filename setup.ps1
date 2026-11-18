@@ -36,7 +36,7 @@ if ($isSource) {
         Copy-Item (Join-Path $src $d) $Target -Recurse -Force
     }
 }
-# decision-rack moved into the session-board plugin (mods/). Copy does not delete, so remove the old copy.
+# decision-rack moved into the session-board plugin (plugins/session-board). Copy does not delete, so remove the old copy.
 $old = Join-Path $Target 'skills\decision-rack'
 if (Test-Path $old) { Remove-Item $old -Recurse -Force; Write-Host "Removed old $old" }
 
@@ -69,14 +69,29 @@ Write-Host "Copied: CLAUDE.shared.md, docs, agents, skills, hooks -> $Target"
 # Point Claude Code at this repo's own plugins (session-board, relay-skills, relay-agents, ...).
 # Runs even with -SkipPlugins: it installs nothing, and an update that moves the folder must move the variable too.
 # shortcut: the variable holds one path. If it holds something else, warn and keep it. Support a path list if a second source is needed.
-$mods = Join-Path $src 'plugins'
+# A test run into another -Target must not touch the real user variable.
+$realTarget = $Target.TrimEnd('\') -eq "$env:USERPROFILE\.claude"
+$normPath = { param($p) [IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($p)).TrimEnd('\') }
+$mods = & $normPath (Join-Path $src 'plugins')
+# The plugins lived in mods\my-own-mods\plugins until 2026-11-18. git pull leaves its ignored files behind,
+# and a variable still pointing there would load that shell, so remove the folder.
+$oldDir = Join-Path $src 'mods\my-own-mods'
+if (Test-Path $oldDir) {
+    # Only the ignored leftovers (.gitignore: .claude-plugin/types/, tsconfig.json, *.log) may go. Anything else is the user's work.
+    $own = Get-ChildItem $oldDir -Recurse -File -Force | Where-Object { $_.FullName -notmatch '\\\.claude-plugin\\types\\' -and $_.Name -ne 'tsconfig.json' -and $_.Extension -ne '.log' }
+    if ($own) { Write-Warning "$oldDir still holds $(@($own).Count) file(s) of your own. Move them into plugins\, then delete the folder." }
+    else { Remove-Item $oldDir -Recurse -Force; Write-Host "Removed old $oldDir" }
+}
+if ((Test-Path (Join-Path $src 'mods')) -and -not (Get-ChildItem (Join-Path $src 'mods') -Force)) { Remove-Item (Join-Path $src 'mods') }
 $old = [Environment]::GetEnvironmentVariable('CLAUDE_CODE_PLUGIN_DIRS', 'User')
-# '*my-own-mods\plugins' is the old location (mods\my-own-mods\plugins, moved 2026-11-18)
-if (-not $old -or $old -eq $mods -or $old -like '*my-own-mods\plugins') {
-    if ($old -ne $mods) {
-        [Environment]::SetEnvironmentVariable('CLAUDE_CODE_PLUGIN_DIRS', $mods, 'User')
-        Write-Host "Set CLAUDE_CODE_PLUGIN_DIRS -> $mods"
-    }
+$oldNorm = if ($old) { & $normPath $old } else { '' }
+if (-not $realTarget) {
+    Write-Host "Test target: skipped CLAUDE_CODE_PLUGIN_DIRS (would be $mods)"
+} elseif ($oldNorm -eq $mods) {
+    # already right
+} elseif (-not $old -or $oldNorm -like '*\my-own-mods\plugins') {
+    [Environment]::SetEnvironmentVariable('CLAUDE_CODE_PLUGIN_DIRS', $mods, 'User')
+    Write-Host "Set CLAUDE_CODE_PLUGIN_DIRS -> $mods"
 } else {
     Write-Warning "CLAUDE_CODE_PLUGIN_DIRS already holds '$old'. Left unchanged. Set it to '$mods' by hand."
 }
