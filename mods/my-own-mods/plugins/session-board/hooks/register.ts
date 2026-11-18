@@ -14,6 +14,7 @@ import type { Ask, Group, Report } from './asks'
 import { countAgentCall, register as registerAgents, startAgentTicker } from './agents'
 import { bandPrompt, bandStart, bandTurnDone, register as registerBand, setAskCounter } from './band'
 import { register as registerGuard } from './guard'
+import { register as registerSecrets } from './secrets'
 import { cardAsk, lastTurn, signalsOf } from './signals'
 import type { Signals } from './signals'
 
@@ -392,6 +393,8 @@ async function onTick($: any) {
 export const register: Register = (on, options) => {
   // 확인 패널(edit-guard)을 먼저 건다: 그 패널 훅이 바깥에서 세션 보드를 감싸 아래에 카드를 붙인다. 플러그인 1개는 모듈 1개만 등록할 수 있다
   registerGuard(on, options)
+  // 비밀 파일 읽기 가드. 패널을 그리지 않고 거부만 한다
+  registerSecrets(on, options)
   // 하위 에이전트 묶음도 같은 패널에 붙인다. 순서: 가드(맨 바깥, 카드는 맨 아래) → 에이전트 → 세션 보드(맨 위)
   registerAgents(on, options)
   // 입력창 위 띠(옛 relay-band)도 이 플러그인이 그린다. 띠의 개수 단추가 패널을 직접 연다

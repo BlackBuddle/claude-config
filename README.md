@@ -10,7 +10,7 @@ Claude Code 개인 설정 묶음. 다른 컴퓨터에 같은 환경을 만든다
 | `docs/` | 규칙의 본문 5개: 노력 수준, 작업 방식, 요약 시스템, 디자인 스킬 선택표, 검토 선택표 |
 | `agents/summarizer.md` | 요약 에이전트 |
 | `skills/stageshow/` | 로컬 스킬 (계정에 올리면 이 사본은 필요 없다) |
-| `mods/my-own-mods/` | 내가 만든 모드·스킬·에이전트 모음 3개. session-board(오른쪽 패널, 입력창 위 띠, 위험 명령 확인 카드, 하위 에이전트, 결재함), relay-skills(`/handoff`), relay-agents(설계·구현·리뷰 에이전트). 결재함 규칙: `docs/통합_작업방식.md` 11절. 자세한 설명은 `mods/my-own-mods/README.md` |
+| `mods/my-own-mods/` | 내가 만든 모드·스킬·에이전트 모음 3개. session-board(오른쪽 패널, 입력창 위 띠, 위험 명령 확인 카드, 비밀 파일 읽기 가드, 하위 에이전트, 결재함), relay-skills(`/handoff`, `/ship`), relay-agents(설계·구현·리뷰 에이전트). 결재함 규칙: `docs/통합_작업방식.md` 11절. 자세한 설명은 `mods/my-own-mods/README.md` |
 | `skills/design-clash/` | 로컬 스킬. 디자인 스킬 3개로 시안 3개를 따로 만들고 선택기에서 비교한다. 명령: `/design-clash` |
 | `hooks/reminder.txt` | 알림 훅의 문구. 메시지마다 Claude에게 규칙 4개를 알린다 |
 | `plugins-backup/` | 플러그인 본체의 사본 (`ponytail`, `egm`, `frontend-design`). 백업용이다. 설치는 명령으로 한다. 설치된 판보다 낡을 수 있다 |
