@@ -15,7 +15,7 @@ description: 예전에 정한 것·한 일을 찾는다. 결정 기록, HANDOFF,
 - 비밀 정보(키, 토큰, 비밀번호)가 결과에 섞이면 값은 쓰지 않는다.
 
 ## 찾는 순서 (싼 것부터)
-1. **결정 기록**: 현재 프로젝트의 `docs/결정_기록.md`를 Grep 한다. 없거나 못 찾으면 `C:\Users\KCCISTC\Desktop` 아래 모든 `결정_기록.md`(glob `**/결정_기록.md`)와 `C:\Users\KCCISTC\claude-config\docs\결정_기록.md`를 Grep 한다.
+1. **결정 기록**: 현재 프로젝트의 `docs/결정_기록.md`를 Grep 한다. 없거나 못 찾으면 `~/Desktop` 아래 모든 `결정_기록.md`(glob `**/결정_기록.md`)와 `~/claude-config/docs/결정_기록.md`를 Grep 한다. `~`는 사용자 홈 폴더(`%USERPROFILE%`)다.
 2. **인계·진행 문서**: 같은 범위의 `HANDOFF.md`, `ROADMAP.md`를 Grep 한다.
 3. **git 기록**: 관련 저장소에서 `git log --oneline -i --grep=<검색어> -20` 을 실행한다.
 4. **세션 기록**: 1~3에서 못 찾았거나, 문서에 쓰지 않은 대화를 찾을 때만 한다.
