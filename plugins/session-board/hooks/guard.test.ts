@@ -160,6 +160,9 @@ test('지울 것이 없으면 묻지 않는다', async () => {
   const slow = await measure(timedOut, abs, '/')
   expect(slow.unknown).toBe(true)
   expect(skipsAsk(slow, 'rm -rf /c/tmp/nothere', abs)).toBe(false)
+  // PATH 의 bash 가 배포판 없는 WSL 실행기면 Git bash 로 다시 잰다 (2026-11-19)
+  const wsl = { process: { run: async (argv: string[]) => (argv[0] === 'bash' ? { stdout: '', stderr: 'no distro', exitCode: 1 } : { stdout: '0 0 0\n', stderr: '', exitCode: 0 }) } }
+  expect(skipsAsk(await measure(wsl, abs, '/'), 'rm -rf /c/tmp/nothere', abs)).toBe(true)
 })
 
 // 같은 명령 안에서 정한 변수는 풀어서 잰다 (모름 카드가 수시로 뜨던 원인, 2026-11-18).

@@ -9,6 +9,8 @@
 // 세션 보드 플러그인의 두 번째 모듈이다. 엔진은 한 플러그인이 자기 패널에만 그리게 해서, 한 창(위 세션 보드, 아래 확인 카드)으로 쓰려고 옮겼다 (2026-11-16 사용자 결정)
 
 import type { Register } from 'claude-code'
+// 가드 카드는 AskUserQuestion 도구가 아니라 세션 보드가 못 본다. 보드에 알려 결재 칸을 연다
+import { watchAsk } from './register'
 
 // 세션 보드와 같은 패널을 쓴다. 확인할 것이 있을 때만 세션 보드 아래에 카드를 붙인다
 const PANE_ID = 'session-board'
@@ -83,6 +85,7 @@ async function guard($: any, e: any, next: any, tool: 'Bash' | 'PowerShell') {
   let summary = risk.label
   let unknown = false
   let cause = ''
+  let asked = false
 
   try {
     const sessionCwd: string = await $.session.cwd()
@@ -108,13 +111,17 @@ async function guard($: any, e: any, next: any, tool: 'Bash' | 'PowerShell') {
 
     // 결정은 엔진의 선택 카드로 받는다. 패널 카드는 원격 화면(휴대폰, claude.ai)에 안 그려져 답을 못 받았다 (2026-11-18 사용자 결정)
     // 일반 선택 카드처럼 답할 때까지 기다린다. 진행 단추를 정확히 고를 때만 실행한다. 닫거나 다른 글을 쓰면 취소다
-    mine.decision = await decide($, next, askOf(risk, mine.report))
+    const ask = askOf(risk, mine.report)
+    asked = true
+    await watchAsk($, ask).catch(() => undefined)
+    mine.decision = await decide($, next, ask)
   } catch {
     // 중단이면 interrupted, 그 밖의 예외는 안전하게 거부한다.
     mine.decision = next.signal?.aborted ? 'interrupted' : 'error'
   } finally {
     // 패널은 닫지 않는다: 세션 보드의 패널이다. 카드만 사라진다
     if (held === mine) held = null
+    if (asked) await watchAsk($, null).catch(() => undefined)
     $.ui.invalidate('ui.render')
   }
 
@@ -505,17 +512,19 @@ async function measureRm($: any, risk: Risk, cwd: string): Promise<Report> {
   }
 }
 
-// Windows 에서는 bash 가 PATH 에 없는 경우가 많아서 Git 에 딸린 bash 를 대신 시도한다.
+// Windows 의 PATH 에서 bash 는 WSL 실행기일 수 있다. 배포판이 없으면 출력 없이 실패하므로 다음 후보로 넘어간다
 async function runBash($: any, args: string[], opts: any) {
-  let last: unknown
+  let last: any
   for (const exe of ['bash', 'C:/Program Files/Git/bin/bash.exe']) {
     try {
-      return await $.process.run([exe, ...args], opts)
+      last = await $.process.run([exe, ...args], opts)
+      if (last.exitCode === 0 || String(last.stdout) !== '') return last
     } catch (error) {
       last = error
     }
   }
-  throw last
+  if (last instanceof Error) throw last
+  return last
 }
 
 function psq(s: string): string {

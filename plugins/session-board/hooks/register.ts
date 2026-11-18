@@ -278,6 +278,18 @@ async function sync($: any, signals: Signals, isQuiet: boolean, patch: Partial<R
   for (const id of orphanIds(board, me.appId, me.id)) await closeIn($, id, { askClosedAt: await $.clock.now() })
 }
 
+/** 가드 카드가 떠 있는 동안 결재 칸을 연다(ask). 되돌리기 어려운 명령이라 결재다. 답하면(null) 선택 카드처럼 진행 중으로 돌린다. */
+export async function watchAsk($: any, ask: { question: string; options: string[] } | null) {
+  if (ask === null) {
+    isUserTurn = true
+    if (me?.state === 'waiting') await go($, 'running')
+    return
+  }
+  await go($, 'waiting', '위험 명령 확인')
+  const input = { questions: [{ question: `결재: ${ask.question}`, options: ask.options.map(label => ({ label })) }] }
+  await sync($, signalsOf('', [{ tool_use_id: '', tool: 'AskUserQuestion', input: input as never }]), false)
+}
+
 /** 어느 세션의 기록 파일에 닫은 시각을 쓴다. 내 기록이면 메모리도 같이 고친다. */
 async function closeIn($: any, id: string, patch: { askClosedAt?: number; reportClosedAt?: number }) {
   try {
