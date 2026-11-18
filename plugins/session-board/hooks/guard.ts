@@ -270,7 +270,15 @@ export function classify(command: string, tool: 'Bash' | 'PowerShell'): Risk | n
   if (tool === 'PowerShell' && !isWhatIf && /\|\s*(?:Remove-Item|ri|del|rm|rmdir|rd)\b/i.test(visible) && /\s-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?\b/i.test(visible)) {
     return { kind: 'unmeasured', label: 'Remove-Item -Recurse (파이프)' }
   }
-  for (const seg of splitTop(dropHeredocBodies(command))) {
+  const vars = new Map<string, string>()
+  for (const raw of splitTop(dropHeredocBodies(command))) {
+    // `S=/tmp/x && rm -rf $S` 처럼 같은 명령 안에서 정한 변수는 풀어서 잰다. 못 풀면 모름 카드가 매번 뜬다.
+    const assigned = tool === 'Bash' ? raw.match(ASSIGN) : null
+    if (assigned !== null) {
+      vars.set(assigned[1], tokenize(assigned[2])[0] ?? '')
+      continue
+    }
+    const seg = tool === 'Bash' ? expandKnown(raw, vars) : raw
     // bash -c "..." / powershell -Command "..." 안의 명령도 같은 눈으로 본다.
     const w = unwrap(seg)
     if (w !== null) {
@@ -282,6 +290,14 @@ export function classify(command: string, tool: 'Bash' | 'PowerShell'): Risk | n
     if (r !== null) return r
   }
   return null
+}
+
+// 값에 $·백틱이 든 대입은 풀지 않는다 (명령 치환·다른 변수). 그런 경로는 그대로 모름으로 남는다.
+const ASSIGN = /^\s*(?:export\s+)?([A-Za-z_]\w*)=("(?:[^"\\$`]|\\.)*"|'[^']*'|[^\s$`'"]*)\s*$/
+
+// shortcut: 작은따옴표 안의 '$S' 도 풀어 버린다. 실제 bash 는 풀지 않지만 rm 인자로는 드물다.
+function expandKnown(seg: string, vars: Map<string, string>): string {
+  return seg.replace(/\$\{(\w+)\}|\$(\w+)/g, (m, a, b) => vars.get(a ?? b) ?? m)
 }
 
 // 알려진 한계(정규식 방식): 주석이나 it\'s 의 가짜 따옴표, "C:\out\" 의 \", $( )·백틱 안의 명령은 못 본다.

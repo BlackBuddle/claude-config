@@ -143,6 +143,15 @@ test('변수 경로·측정 실패·미리 셀 수 없는 명령은 모름으로
   expect(failed.recover?.[0][1]).toContain('없다는 뜻이 아닙니다')
 })
 
+// 같은 명령 안에서 정한 변수는 풀어서 잰다 (모름 카드가 수시로 뜨던 원인, 2026-11-18).
+test('같은 명령에서 정한 변수 경로는 풀어서 분류한다', () => {
+  expect(classify('S=/tmp/x && rm -rf $S && mkdir -p $S', 'Bash')?.targets).toEqual(['/tmp/x'])
+  expect(classify('S="C:/a b/c"; rm -rf "$S"', 'Bash')?.targets).toEqual(['C:/a b/c'])
+  expect(classify('export D=/tmp/y; rm -rf ${D}/build', 'Bash')?.targets).toEqual(['/tmp/y/build'])
+  expect(classify('S=$(mktemp -d) && rm -rf $S', 'Bash')?.targets).toEqual(['$S']) // 명령 치환은 그대로 모름
+  expect(classify('rm -rf $S', 'Bash')?.targets).toEqual(['$S'])
+})
+
 // 따옴표 안의 글자와 heredoc 본문은 명령이 아니다 (리뷰가 찾은 오탐).
 test('따옴표 안과 heredoc 본문의 글자에는 걸리지 않는다', () => {
   expect(corruptReason('git commit -m "docs: sed -i 사용법 설명"', 'Bash')).toBeNull()
