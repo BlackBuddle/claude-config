@@ -53,6 +53,15 @@ if (-not $s.language) {
     $s | Add-Member -NotePropertyName language -NotePropertyValue 'korean'
     $changed = $true
 }
+# Ask before risky delete/git commands. The app's own approval prompt replaced the guard card (2026-11-19 decision).
+$ask = @('Bash(rm -rf:*)', 'Bash(rm -r:*)', 'Bash(rm -fr:*)', 'Bash(git reset --hard:*)', 'Bash(git clean:*)', 'Bash(git push --force:*)', 'Bash(git push -f:*)')
+if (-not $s.permissions) { $s | Add-Member -NotePropertyName permissions -NotePropertyValue (New-Object psobject) }
+$have = @($s.permissions.ask | Where-Object { $_ })
+$missing = @($ask | Where-Object { $have -notcontains $_ })
+if ($missing.Count -gt 0) {
+    $s.permissions | Add-Member -NotePropertyName ask -NotePropertyValue (@($have) + @($missing)) -Force
+    $changed = $true
+}
 if ((ConvertTo-Json $s -Depth 30) -notmatch 'reminder\.txt') {
     $changed = $true
     $cmd = "powershell -NoProfile -Command `"Get-Content -Raw '" + ($Target -replace '\\', '/') + "/hooks/reminder.txt'`""
@@ -65,7 +74,7 @@ if ($changed) {
     if (Test-Path $sp) { Copy-Item $sp "$sp.bak-setup" -Force }
     # WriteAllText: no BOM. Set-Content -Encoding utf8 would add one in PowerShell 5.1.
     [IO.File]::WriteAllText($sp, (ConvertTo-Json $s -Depth 30))
-    Write-Host "Updated $sp (reminder hook, language)"
+    Write-Host "Updated $sp (reminder hook, language, ask rules)"
 }
 Write-Host "Copied: CLAUDE.shared.md, docs, agents, skills, hooks -> $Target"
 

@@ -278,18 +278,6 @@ async function sync($: any, signals: Signals, isQuiet: boolean, patch: Partial<R
   for (const id of orphanIds(board, me.appId, me.id)) await closeIn($, id, { askClosedAt: await $.clock.now() })
 }
 
-/** 가드 카드가 떠 있는 동안 결재 칸을 연다(ask). 되돌리기 어려운 명령이라 결재다. 답하면(null) 선택 카드처럼 진행 중으로 돌린다. */
-export async function watchAsk($: any, ask: { question: string; options: string[] } | null) {
-  if (ask === null) {
-    isUserTurn = true
-    if (me?.state === 'waiting') await go($, 'running')
-    return
-  }
-  await go($, 'waiting', '위험 명령 확인')
-  const input = { questions: [{ question: `결재: ${ask.question}`, options: ask.options.map(label => ({ label })) }] }
-  await sync($, signalsOf('', [{ tool_use_id: '', tool: 'AskUserQuestion', input: input as never }]), false)
-}
-
 /** 어느 세션의 기록 파일에 닫은 시각을 쓴다. 내 기록이면 메모리도 같이 고친다. */
 async function closeIn($: any, id: string, patch: { askClosedAt?: number; reportClosedAt?: number }) {
   try {
@@ -403,11 +391,11 @@ async function onTick($: any) {
 }
 
 export const register: Register = (on, options) => {
-  // 확인 패널(edit-guard)을 먼저 건다: 그 패널 훅이 바깥에서 세션 보드를 감싸 아래에 카드를 붙인다. 플러그인 1개는 모듈 1개만 등록할 수 있다
+  // 파일을 깨뜨리는 명령 거부(edit-guard). 플러그인 1개는 모듈 1개만 등록할 수 있어 여기서 건다
   registerGuard(on, options)
   // 비밀 파일 읽기 가드. 패널을 그리지 않고 거부만 한다
   registerSecrets(on, options)
-  // 하위 에이전트 묶음도 같은 패널에 붙인다. 순서: 가드(맨 바깥, 카드는 맨 아래) → 에이전트 → 세션 보드(맨 위)
+  // 하위 에이전트 묶음도 같은 패널에 붙인다. 순서: 에이전트 → 세션 보드(맨 위)
   registerAgents(on, options)
   // 입력창 위 띠(옛 relay-band)도 이 플러그인이 그린다. 띠의 개수 단추가 패널을 직접 연다
   registerBand(on, options)

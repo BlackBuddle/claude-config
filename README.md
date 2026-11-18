@@ -24,7 +24,7 @@ Claude Code 개인 설정 묶음. 다른 컴퓨터에 같은 환경을 만든다
 | `skills/refresh/` | 로컬 스킬. 명령: `/refresh` (로드맵 갱신 → 병렬 진행 → 쓰지 않는 세션 정리 → 결정할 것 보고) |
 | `skills/data-iso/` | 로컬 스킬. 측정 데이터(로봇 경로, 센서 기록)를 등각 기술 도면 SVG와 시간 슬라이더로 그린다. `replay.js`는 anatomy(MIT)에서 가져왔다 (`NOTICE`) |
 | `skills/improve/`, `skills/nothing-design/` | 외부 스킬의 사본 (shadcn/improve, dominikmartn/nothing-design-skill, 둘 다 MIT) |
-| `plugins/` | 내가 만든 플러그인. 앱이 환경 변수로 이 폴더를 직접 읽는다. session-board(오른쪽 패널, 입력창 위 띠, 위험 명령 확인 카드, 비밀 파일 읽기 가드, 하위 에이전트, 결재함), relay-skills(`/handoff`, `/ship`, `/recall`), relay-agents(설계·구현·리뷰 에이전트), superpowers-lite(obra/superpowers의 스킬 4개를 내 방식에 맞춘 사본), humanizer-ko(blader/humanizer의 한국어 판). 결재함 규칙: `docs/통합_작업방식.md` 11절. 자세한 설명은 `plugins/README.md` |
+| `plugins/` | 내가 만든 플러그인. 앱이 환경 변수로 이 폴더를 직접 읽는다. session-board(오른쪽 패널, 입력창 위 띠, 파일을 깨뜨리는 명령 거부, 비밀 파일 읽기 가드, 하위 에이전트, 결재함), relay-skills(`/handoff`, `/ship`, `/recall`), relay-agents(설계·구현·리뷰 에이전트), superpowers-lite(obra/superpowers의 스킬 4개를 내 방식에 맞춘 사본), humanizer-ko(blader/humanizer의 한국어 판). 결재함 규칙: `docs/통합_작업방식.md` 11절. 자세한 설명은 `plugins/README.md` |
 | `hooks/reminder.txt` | 알림 훅의 문구. 메시지마다 Claude에게 규칙 4개를 알린다 |
 | `plugins-backup/` | 플러그인 본체의 사본 (`ponytail`, `egm`, `frontend-design`). 백업용이다. 설치는 명령으로 한다. 설치된 판보다 낡을 수 있다 |
 | `setup.ps1` | 설치 스크립트 |
