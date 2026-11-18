@@ -11,6 +11,7 @@
 | [session-board](session-board) | 모드 | 오른쪽 패널, 입력창 위 한 줄 | 패널: 세션 상태와 사용자를 기다리는 결재·알림·확인(위), 실행 중인 하위 에이전트(가운데), 위험한 삭제·git 명령의 확인 카드(아래). 띠: 고양이 옆 결재·알림 개수 단추(누르면 패널), 검증 결과, 하위 에이전트 수, 컨텍스트, 주간 한도와 오늘 권장량, 턴 시간, 캐시. |
 | [relay-skills](relay-skills) | 스킬 | `/handoff`·`/ship`은 직접 입력할 때만, `/recall`은 지난 결정을 물을 때 자동으로도 | `/handoff`: 실행한 명령의 결과를 본 것만 "완료"로 적는 인계 문서(`HANDOFF.md`, 최신 1개). `/recall`: 지난 결정·작업을 결정 기록·HANDOFF·git·세션 기록에서 찾아 출처와 함께 답한다. `/ship`: 커밋·push 직전 점검표(원격 먼저, 비밀 정보, 테스트, 결정 기록, 문서). |
 | [superpowers-lite](superpowers-lite) | 스킬 | 상황이 맞을 때 자동 | obra/superpowers에서 4개만 남긴 사본: 브레인스토밍(결과는 `PLAN.md`), TDD, 체계적 디버깅, 완료 전 검증. 바꾼 곳은 그 폴더의 README. |
+| [humanizer-ko](humanizer-ko) | 스킬 | 글 다듬기를 요청할 때 | blader/humanizer의 한국어 판: 사람에게 보일 한국어 글의 AI 글투(대비 연출, 같은 어미, 번역투, 챗봇 말투 등 26개)를 고친다. Claude 답변 문체에는 쓰지 않는다. |
 | [relay-agents](relay-agents) | 에이전트 | 하위 에이전트 호출 | `relay-design`(Opus, high), `relay-build`(Opus, medium), `relay-review`(Opus, high). 모델과 노력 수준이 파일에 고정되어 상한선이 됩니다. |
 
 ## 설치

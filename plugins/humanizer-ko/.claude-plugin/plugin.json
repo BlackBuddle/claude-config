@@ -1,0 +1,6 @@
+{
+  "name": "humanizer-ko",
+  "version": "4.0.0-ko.1",
+  "license": "MIT",
+  "description": "blader/humanizer 4.0.0 (b48c832)의 한국어 판. 사람에게 보일 한국어 글에서 AI 글투(대비 연출, 마무리 한 줄, 3개 나열, 같은 어미, 번역투, 부풀리기, 챗봇 말투)를 고친다."
+}
