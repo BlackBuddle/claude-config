@@ -1,6 +1,6 @@
-# my-own-mods
+# plugins
 
-릴레이형 작업(설계 → 구현 → 리뷰 → 인계)을 위한 Claude Code 모드, 스킬, 에이전트 모음입니다. 플러그인 3개가 들어 있고, 각각 따로 설치할 수 있습니다.
+릴레이형 작업(설계 → 구현 → 리뷰 → 인계)을 위한 Claude Code 모드, 스킬, 에이전트 모음입니다. claude-config 저장소의 일부입니다. 예전에는 별도 저장소(`my-own-mods`)였고, 2026-11-18에 지금 위치로 옮겼습니다.
 
 예전의 `edit-guard`(위험 명령 확인), `agent-panel`(하위 에이전트 패널), `relay-band`(입력창 위 띠)는 `session-board` 안으로 합쳤습니다. 오른쪽 패널을 하나로 쓰고, 띠의 단추가 명령 없이 패널을 열게 하기 위해서입니다.
 
@@ -8,19 +8,14 @@
 
 | 이름 | 종류 | 나타나는 곳 | 하는 일 |
 |---|---|---|---|
-| [session-board](plugins/session-board) | 모드 | 오른쪽 패널, 입력창 위 한 줄 | 패널: 세션 상태와 사용자를 기다리는 결재·알림·확인(위), 실행 중인 하위 에이전트(가운데), 위험한 삭제·git 명령의 확인 카드(아래). 띠: 고양이 옆 결재·알림 개수 단추(누르면 패널), 검증 결과, 하위 에이전트 수, 컨텍스트, 주간 한도와 오늘 권장량, 턴 시간, 캐시. |
-| [relay-skills](plugins/relay-skills) | 스킬 | 직접 입력할 때만 | `/handoff`: 실행한 명령의 결과를 본 것만 "완료"로 적는 인계 문서(`HANDOFF.md`, 최신 1개). `/recall`: 지난 결정·작업을 결정 기록·HANDOFF·git·세션 기록에서 찾아 출처와 함께 답한다. `/ship`: 커밋·push 직전 점검표(원격 먼저, 비밀 정보, 테스트, 결정 기록, 문서). |
-| [relay-agents](plugins/relay-agents) | 에이전트 | 하위 에이전트 호출 | `relay-design`(Opus, high), `relay-build`(Opus, medium), `relay-review`(Opus, high). 모델과 노력 수준이 파일에 고정되어 상한선이 됩니다. |
+| [session-board](session-board) | 모드 | 오른쪽 패널, 입력창 위 한 줄 | 패널: 세션 상태와 사용자를 기다리는 결재·알림·확인(위), 실행 중인 하위 에이전트(가운데), 위험한 삭제·git 명령의 확인 카드(아래). 띠: 고양이 옆 결재·알림 개수 단추(누르면 패널), 검증 결과, 하위 에이전트 수, 컨텍스트, 주간 한도와 오늘 권장량, 턴 시간, 캐시. |
+| [relay-skills](relay-skills) | 스킬 | 직접 입력할 때만 | `/handoff`: 실행한 명령의 결과를 본 것만 "완료"로 적는 인계 문서(`HANDOFF.md`, 최신 1개). `/recall`: 지난 결정·작업을 결정 기록·HANDOFF·git·세션 기록에서 찾아 출처와 함께 답한다. `/ship`: 커밋·push 직전 점검표(원격 먼저, 비밀 정보, 테스트, 결정 기록, 문서). |
+| [superpowers-lite](superpowers-lite) | 스킬 | 상황이 맞을 때 자동 | obra/superpowers에서 4개만 남긴 사본: 브레인스토밍(결과는 `PLAN.md`), TDD, 체계적 디버깅, 완료 전 검증. 바꾼 곳은 그 폴더의 README. |
+| [relay-agents](relay-agents) | 에이전트 | 하위 에이전트 호출 | `relay-design`(Opus, high), `relay-build`(Opus, medium), `relay-review`(Opus, high). 모델과 노력 수준이 파일에 고정되어 상한선이 됩니다. |
 
 ## 설치
 
-Claude Code 터미널 세션의 입력창에서:
-
-```
-/plugin install session-board --marketplace Dawnilove/my-own-mods
-```
-
-`y`로 마켓플레이스를 추가한 뒤 범위를 고릅니다. 다른 항목은 이름만 바꿔 같은 방식으로 설치합니다.
+따로 설치하지 않습니다. 저장소의 `setup.ps1`이 사용자 환경 변수 `CLAUDE_CODE_PLUGIN_DIRS`를 이 폴더로 정합니다. 앱은 이 폴더 안의 플러그인을 모두 불러옵니다 (목록에 `@inline`으로 보입니다). 새 플러그인은 이 폴더에 하위 폴더로 넣고 앱을 다시 시작합니다.
 
 설치한 뒤 확인하는 방법:
 1. session-board: 세션을 열면 오른쪽에 패널이 열리고 입력창 위에 한 줄 띠가 보입니다. 위험한 삭제 명령을 시키면 패널 아래에 확인 카드가 붙습니다.

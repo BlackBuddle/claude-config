@@ -10,8 +10,9 @@ Claude Code 개인 설정 묶음. 다른 컴퓨터에 같은 환경을 만든다
 | `docs/` | 규칙의 본문 5개: 노력 수준, 작업 방식, 요약 시스템, 디자인 스킬 선택표, 검토 선택표 |
 | `agents/summarizer.md` | 요약 에이전트 |
 | `skills/stageshow/` | 로컬 스킬 (계정에 올리면 이 사본은 필요 없다) |
-| `mods/my-own-mods/` | 내가 만든 모드·스킬·에이전트 모음 3개. session-board(오른쪽 패널, 입력창 위 띠, 위험 명령 확인 카드, 비밀 파일 읽기 가드, 하위 에이전트, 결재함), relay-skills(`/handoff`, `/ship`, `/recall`), relay-agents(설계·구현·리뷰 에이전트). 결재함 규칙: `docs/통합_작업방식.md` 11절. 자세한 설명은 `mods/my-own-mods/README.md` |
 | `skills/design-clash/` | 로컬 스킬. 디자인 스킬 3개로 시안 3개를 따로 만들고 선택기에서 비교한다. 명령: `/design-clash` |
+| `skills/improve/`, `skills/nothing-design/` | 외부 스킬의 사본 (shadcn/improve, dominikmartn/nothing-design-skill, 둘 다 MIT) |
+| `plugins/` | 내가 만든 플러그인. 앱이 환경 변수로 이 폴더를 직접 읽는다. session-board(오른쪽 패널, 입력창 위 띠, 위험 명령 확인 카드, 비밀 파일 읽기 가드, 하위 에이전트, 결재함), relay-skills(`/handoff`, `/ship`, `/recall`), relay-agents(설계·구현·리뷰 에이전트), superpowers-lite(obra/superpowers의 스킬 4개를 내 방식에 맞춘 사본). 결재함 규칙: `docs/통합_작업방식.md` 11절. 자세한 설명은 `plugins/README.md` |
 | `hooks/reminder.txt` | 알림 훅의 문구. 메시지마다 Claude에게 규칙 4개를 알린다 |
 | `plugins-backup/` | 플러그인 본체의 사본 (`ponytail`, `egm`, `frontend-design`). 백업용이다. 설치는 명령으로 한다. 설치된 판보다 낡을 수 있다 |
 | `setup.ps1` | 설치 스크립트 |
@@ -41,7 +42,7 @@ gh repo clone Dawnilove/claude-config "$env:USERPROFILE\claude-config"; powershe
 `CLAUDE_CODE_PLUGIN_DIRS`에 다른 값이 이미 있으면 스크립트가 경고만 하고 바꾸지 않는다. 그때는 아래 명령으로 직접 정한 뒤 앱을 다시 시작한다.
 
 ```powershell
-[Environment]::SetEnvironmentVariable('CLAUDE_CODE_PLUGIN_DIRS', "$env:USERPROFILE\claude-config\mods\my-own-mods\plugins", 'User')
+[Environment]::SetEnvironmentVariable('CLAUDE_CODE_PLUGIN_DIRS', "$env:USERPROFILE\claude-config\plugins", 'User')
 ```
 
 ### 2-3. 스크립트가 하는 일
@@ -54,7 +55,7 @@ gh repo clone Dawnilove/claude-config "$env:USERPROFILE\claude-config"; powershe
 | 3-1 | 구 `skills/decision-rack`이 있으면 지운다 | 결재함이 `session-board`로 옮겨졌다 |
 | 4 | `settings.json`에 알림 훅 1개와 `"language": "korean"`을 추가한다 | 다른 설정과 훅은 그대로 둔다. 언어 설정이 이미 있으면 그 값을 둔다. 고치기 전의 파일은 `settings.json.bak-setup`으로 남긴다 |
 | 5 | 플러그인 4개를 설치한다: `ponytail`, `frontend-design`, `egm`, `codex` | 이미 있으면 건너뛴다. `codex`는 Codex CLI(`npm install -g @openai/codex`)와 `codex login`이 필요하다 |
-| 6 | 사용자 환경 변수 `CLAUDE_CODE_PLUGIN_DIRS`를 저장소의 `mods\my-own-mods\plugins`로 정한다. 내 모드 3개(`session-board`, `relay-skills`, `relay-agents`)가 켜진다 | 다른 값이 이미 있으면 경고만 하고 그대로 둔다 |
+| 6 | 사용자 환경 변수 `CLAUDE_CODE_PLUGIN_DIRS`를 저장소의 `plugins`로 정한다. 내 플러그인(`session-board`, `relay-skills`, `relay-agents`)이 켜진다. `-SkipPlugins`로 실행해도 이 단계는 한다 | 옛 경로(`...\my-own-mods\plugins`)는 새 경로로 바꾼다. 다른 값이 있으면 경고만 하고 그대로 둔다 |
 
 ### 2-4. 설치를 확인한다
 
@@ -63,7 +64,7 @@ gh repo clone Dawnilove/claude-config "$env:USERPROFILE\claude-config"; powershe
 3. 플러그인 목록을 본다: `claude plugin list`
 4. 작은 코딩 작업을 시킨다. Claude가 작업 전에 노력 수준을 말하고, 작업 끝에 검토 명령을 제안하면 정상이다.
 5. 내 모드를 확인한다. 다시 시작한 Claude Code(데스크톱 앱)에서 아래를 본다.
-   - 환경 변수: PowerShell에서 `[Environment]::GetEnvironmentVariable('CLAUDE_CODE_PLUGIN_DIRS','User')`를 실행한다. `...\claude-config\mods\my-own-mods\plugins`가 나오면 정상이다.
+   - 환경 변수: PowerShell에서 `[Environment]::GetEnvironmentVariable('CLAUDE_CODE_PLUGIN_DIRS','User')`를 실행한다. `...\claude-config\plugins`가 나오면 정상이다.
    - 오른쪽에 `세션` 패널이 열리고, 입력창 위에 고양이 띠가 보인다. 패널은 `/session_board`로 열고 닫는다.
    - 입력창에 `/handoff`를 입력하면 자동 완성에 나온다.
    - 보이지 않으면 앱을 완전히 종료했다가 다시 시작한다. 그래도 없으면 7절을 본다.
@@ -80,7 +81,7 @@ git -C "$env:USERPROFILE\claude-config" pull; powershell -ExecutionPolicy Bypass
 
 끝난 뒤 Claude Code를 다시 시작한다. 자동으로 적용되지 않는다. 변경이 있을 때마다 이 명령을 실행한다.
 
-주의: `-SkipPlugins`는 환경 변수(6단계)도 건너뛴다. 모드를 처음 켜는 컴퓨터는 `-SkipPlugins` 없이 `setup.ps1`을 한 번 실행한다. 모드 코드는 저장소 폴더를 직접 읽으므로 `git pull`만으로 갱신된다.
+`-SkipPlugins`는 5단계(외부 플러그인 설치)만 건너뛴다. 환경 변수(6단계)는 항상 맞춘다. 내 플러그인 코드는 저장소 폴더를 직접 읽으므로 `git pull`만으로 갱신된다.
 
 ## 4. 고친 설정을 저장소에 올린다
 

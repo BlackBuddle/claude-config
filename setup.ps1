@@ -66,17 +66,19 @@ if ($changed) {
 }
 Write-Host "Copied: CLAUDE.shared.md, docs, agents, skills, hooks -> $Target"
 
-# Point Claude Code at this repo's mods (session-board, relay-skills, relay-agents).
+# Point Claude Code at this repo's own plugins (session-board, relay-skills, relay-agents, ...).
+# Runs even with -SkipPlugins: it installs nothing, and an update that moves the folder must move the variable too.
 # shortcut: the variable holds one path. If it holds something else, warn and keep it. Support a path list if a second source is needed.
-if (-not $SkipPlugins) {
-    $mods = Join-Path $src 'mods\my-own-mods\plugins'
-    $old = [Environment]::GetEnvironmentVariable('CLAUDE_CODE_PLUGIN_DIRS', 'User')
-    if (-not $old -or $old -like '*my-own-mods\plugins') {
+$mods = Join-Path $src 'plugins'
+$old = [Environment]::GetEnvironmentVariable('CLAUDE_CODE_PLUGIN_DIRS', 'User')
+# '*my-own-mods\plugins' is the old location (mods\my-own-mods\plugins, moved 2026-11-18)
+if (-not $old -or $old -eq $mods -or $old -like '*my-own-mods\plugins') {
+    if ($old -ne $mods) {
         [Environment]::SetEnvironmentVariable('CLAUDE_CODE_PLUGIN_DIRS', $mods, 'User')
         Write-Host "Set CLAUDE_CODE_PLUGIN_DIRS -> $mods"
-    } else {
-        Write-Warning "CLAUDE_CODE_PLUGIN_DIRS already holds '$old'. Left unchanged. Set it to '$mods' by hand."
     }
+} else {
+    Write-Warning "CLAUDE_CODE_PLUGIN_DIRS already holds '$old'. Left unchanged. Set it to '$mods' by hand."
 }
 
 if (-not $SkipPlugins) {

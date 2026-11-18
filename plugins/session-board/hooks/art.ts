@@ -4,7 +4,7 @@ import { OLD_ASK_MS, deadLabel, isDead, openAsk, openReport } from './asks'
 import type { Group } from './asks'
 import type { Rec } from './register'
 
-// 색은 my-own-mods 의 다른 모드와 같다. 앱 테마는 읽을 수 없어 고정 색을 쓴다.
+// 색은 이 저장소(plugins/)의 다른 모드와 같다. 앱 테마는 읽을 수 없어 고정 색을 쓴다.
 const C = { ink: '#14172B', dim: '#5B6080', line: '#E3E6F2', soft: '#EEF0F8', white: '#FFFFFF', indigo: '#4F6BFF', amber: '#FBBF24' }
 
 export function fmtDur(ms: number): string {
