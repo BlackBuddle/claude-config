@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { askOf, classify, corruptReason, decide, draw, measure } from './guard'
+import { askOf, classify, corruptReason, decide, draw, measure, skipsAsk } from './guard'
 
 // 선택 카드의 답과 턴 중단을 함께 기다린다. 카드가 끝나지 않아도 중단되면 멈춘다 (2026-11-18 검토 지적)
 // 기다리기(pause)는 진짜처럼 시간이 걸려야 한다. 바로 끝나면 루프가 마이크로태스크만 돌아 중단 타이머가 못 돈다
@@ -141,6 +141,25 @@ test('변수 경로·측정 실패·미리 셀 수 없는 명령은 모름으로
   const failed = await measure(broken, rm(['a']), '/')
   expect(failed.unknown).toBe(true)
   expect(failed.recover?.[0][1]).toContain('없다는 뜻이 아닙니다')
+})
+
+// 지울 것이 없으면 카드를 띄우지 않는다 (2026-11-19 사용자 지적). cd 가 있으면 잰 폴더가 다를 수 있어 묻는다.
+test('지울 것이 없으면 묻지 않는다', async () => {
+  const none = { process: { run: async () => ({ stdout: '0 0 0\n', stderr: '', exitCode: 0 }) } }
+  const abs = { kind: 'rm', label: 'rm -rf', targets: ['/c/tmp/nothere'] }
+  const missing = await measure(none, abs, '/')
+  expect(skipsAsk(missing, 'rm -rf /c/tmp/nothere', abs)).toBe(true)
+  expect(skipsAsk(missing, 'cd build && rm -rf /c/tmp/nothere', abs)).toBe(false)
+  // 상대 경로는 앞선 호출의 cd 로 다른 폴더일 수 있어 묻는다
+  const rel = { kind: 'rm', label: 'rm -rf', targets: ['out'] }
+  expect(skipsAsk(await measure(none, rel, '/'), 'rm -rf out', rel)).toBe(false)
+  const vague = { kind: 'rm', label: 'rm -rf', targets: ['$D'] }
+  expect(skipsAsk(await measure(none, vague, '/'), 'rm -rf $D', vague)).toBe(false) // 모름은 여전히 묻는다
+  // 시간 초과로 출력이 비면 "없음"이 아니라 모름이다
+  const timedOut = { process: { run: async () => ({ stdout: '', stderr: '', exitCode: 124 }) } }
+  const slow = await measure(timedOut, abs, '/')
+  expect(slow.unknown).toBe(true)
+  expect(skipsAsk(slow, 'rm -rf /c/tmp/nothere', abs)).toBe(false)
 })
 
 // 같은 명령 안에서 정한 변수는 풀어서 잰다 (모름 카드가 수시로 뜨던 원인, 2026-11-18).

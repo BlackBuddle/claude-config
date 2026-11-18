@@ -18,7 +18,7 @@ const LIST_MAX = 10
 // recover: 되돌릴 수 있는지, 단계(err/warn/mute)와 문구. 알 수 없으면 비운다.
 // facts: "원인 …", "해결 …" 처럼 이름표가 붙은 줄.
 type Recover = ['err' | 'warn' | 'mute', string]
-type Report = { summary: string; lines: string[]; more?: number; note?: string; unknown?: boolean; recover?: Recover[]; facts?: [string, string][] }
+type Report = { summary: string; lines: string[]; more?: number; note?: string; unknown?: boolean; empty?: boolean; recover?: Recover[]; facts?: [string, string][] }
 type Risk = { kind: string; label: string; targets?: string[]; args?: string[]; dir?: string }
 // cwd: 영향을 잰 폴더. showCommand: 명령 펼침.
 type Held = { command: string; risk: Risk; report: Report | null; decision: string | null; where: 'pane' | 'band'; cwd: string; showCommand: boolean }
@@ -93,6 +93,12 @@ async function guard($: any, e: any, next: any, tool: 'Bash' | 'PowerShell') {
     cause = (mine.report.facts ?? []).map(([k, v]) => `${k}: ${v}`).join(' · ')
     mine.cwd = cwd
     mine.showCommand = unknown // 영향을 모를 때는 명령을 처음부터 펼쳐 보인다
+
+    // 지울 것이 없으면 묻지 않고 실행한다. cd 가 있으면 잰 폴더와 실행 폴더가 다를 수 있어 그대로 묻는다
+    if (skipsAsk(mine.report, command, risk)) {
+      mine.decision = 'proceed'
+      return next(e)
+    }
 
     // 세션 보드와 같은 제목으로 연다. 패널이 이미 열려 있으면 그대로 두고 카드만 붙는다
     const opened = await $.ui.open({ id: PANE_ID, title: '세션', focus: true })
@@ -258,8 +264,10 @@ function tokenize(text: string): string[] {
   return words
 }
 
+const ABSOLUTE = /^([A-Za-z]:|\/|~)/
+
 function resolvePath(base: string, p: string): string {
-  return /^([A-Za-z]:|\/|~)/.test(p) ? p : `${base}/${p}`
+  return ABSOLUTE.test(p) ? p : `${base}/${p}`
 }
 
 // shortcut: cd 로 옮긴 폴더는 따라가지 않고 세션 폴더 기준으로 잰다. 어긋나면 cd 추적을 붙인다.
@@ -442,6 +450,11 @@ export async function measure($: any, risk: Risk, cwd: string): Promise<Report> 
   }
 }
 
+const CHANGES_DIR = /(?:^|[\s;&|(])(?:cd|pushd|chdir|Set-Location|sl)(?:\s|$)/i
+// 상대 경로는 앞선 호출의 cd 가 남아 있으면 다른 폴더를 가리킨다. 절대 경로일 때만 "없음"을 믿는다
+export const skipsAsk = (report: Report, command: string, risk: Risk): boolean =>
+  report.empty === true && !CHANGES_DIR.test(command) && (risk.targets ?? []).every(t => ABSOLUTE.test(t))
+
 // 모름 상태의 안내. 영향이 없다는 뜻이 아니다.
 const NOT_NONE: Recover = ['mute', '파일이 없다는 뜻이 아닙니다. 명령을 읽고 판단하세요.']
 const REMOVE_WARN: Recover = ['warn', '⚠ 휴지통을 거치지 않습니다 · git 에 올려 둔 파일이면 되살릴 수 있습니다']
@@ -469,15 +482,19 @@ find "\${paths[@]}" \\( -type f -o -type l \\) 2>/dev/null | head -n ${LIST_MAX}
 
 async function measureRm($: any, risk: Risk, cwd: string): Promise<Report> {
   const targets = risk.targets ?? []
-  if (targets.length === 0) return { summary: '경로 없는 rm', lines: [], note: '지울 경로가 없습니다.' }
+  if (targets.length === 0) return { summary: '경로 없는 rm', lines: [], empty: true, note: '지울 경로가 없습니다.' }
   const run = await runBash($, ['-c', RM_SCRIPT, 'edit-guard', ...targets], { cwd, timeoutMs: 15000 })
   const [head, ...rest] = String(run.stdout).split('\n').filter((l: string) => l !== '')
-  const [files, bytes, found] = (head ?? '0 0 0').split(' ').map(Number)
+  // 시간 초과·실패로 출력이 비면 "없음"이 아니다. 큰 폴더일수록 이렇게 되므로 모름으로 묻는다
+  if (run.exitCode !== 0 || head === undefined) {
+    return { summary: '영향 범위를 재지 못했습니다', lines: [], unknown: true, recover: [NOT_NONE], facts: [['원인', '파일을 세다가 끝나지 않았습니다 (시간 초과 또는 실패)']] }
+  }
+  const [files, bytes, found] = head.split(' ').map(Number)
   if (!found && hasVar(targets)) {
     return { summary: '지울 대상을 확인하지 못했습니다', lines: [], unknown: true, recover: [NOT_NONE], facts: [['원인', `변수 ${varName(targets)} 를 풀지 못했습니다`], ['또는', 'bash 를 찾지 못했습니다']] }
   }
   // 제목은 짧게 두고, 없는 경로는 마지막 이름만 흐린 줄에 쓴다 (2026-11-16 사용자 요청: 전체 경로까지 다 적을 필요 없다)
-  if (!found) return { summary: '지울 것이 없음', lines: [], note: `없는 경로: ${targets.map(t => t.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || t).join(', ')}` }
+  if (!found) return { summary: '지울 것이 없음', lines: [], empty: true, note: `없는 경로: ${targets.map(t => t.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || t).join(', ')}` }
   if (!files) return { summary: `파일 없는 경로 ${found}개를 지웁니다`, lines: [], note: `경로: ${targets.join(' ')}` }
   return {
     summary: `파일 ${files}개 · ${size(bytes)} 삭제`,
@@ -507,7 +524,7 @@ function psq(s: string): string {
 
 async function measurePsRemove($: any, risk: Risk, cwd: string): Promise<Report> {
   const targets = risk.targets ?? []
-  if (targets.length === 0) return { summary: '경로 없는 Remove-Item', lines: [], note: '지울 경로가 없습니다.' }
+  if (targets.length === 0) return { summary: '경로 없는 Remove-Item', lines: [], empty: true, note: '지울 경로가 없습니다.' }
   const script =
     `$t=@(${targets.map(psq).join(',')}); $f=@(); ` +
     `foreach($x in $t){ $f += @(Get-ChildItem -Path $x -Recurse -Force -File -ErrorAction SilentlyContinue) }; ` +
