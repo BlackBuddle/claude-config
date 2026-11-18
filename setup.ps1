@@ -90,5 +90,7 @@ if (-not $SkipPlugins) {
     claude plugin install frontend-design@claude-plugins-official
     claude plugin marketplace add google/elephant-goldfish-model
     claude plugin install egm@egm
+    claude plugin marketplace add openai/codex-plugin-cc
+    claude plugin install codex@openai-codex   # needs the codex CLI and 'codex login' (done by the user)
 }
 Write-Host 'Done. Restart Claude Code.'

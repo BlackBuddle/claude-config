@@ -53,7 +53,7 @@ gh repo clone Dawnilove/claude-config "$env:USERPROFILE\claude-config"; powershe
 | 3 | `docs`, `agents`, `skills`, `hooks`를 `~/.claude`에 복사한다 | 같은 이름의 파일은 덮어쓴다 |
 | 3-1 | 구 `skills/decision-rack`이 있으면 지운다 | 결재함이 `session-board`로 옮겨졌다 |
 | 4 | `settings.json`에 알림 훅 1개와 `"language": "korean"`을 추가한다 | 다른 설정과 훅은 그대로 둔다. 언어 설정이 이미 있으면 그 값을 둔다. 고치기 전의 파일은 `settings.json.bak-setup`으로 남긴다 |
-| 5 | 플러그인 3개를 설치한다: `ponytail`, `frontend-design`, `egm` | 이미 있으면 건너뛴다 |
+| 5 | 플러그인 4개를 설치한다: `ponytail`, `frontend-design`, `egm`, `codex` | 이미 있으면 건너뛴다. `codex`는 Codex CLI(`npm install -g @openai/codex`)와 `codex login`이 필요하다 |
 | 6 | 사용자 환경 변수 `CLAUDE_CODE_PLUGIN_DIRS`를 저장소의 `mods\my-own-mods\plugins`로 정한다. 내 모드 3개(`session-board`, `relay-skills`, `relay-agents`)가 켜진다 | 다른 값이 이미 있으면 경고만 하고 그대로 둔다 |
 
 ### 2-4. 설치를 확인한다
