@@ -4,7 +4,7 @@
 // tool.call (Bash, PowerShell):
 //   1) sed -i, heredoc 로 파일 쓰기, python/PowerShell 문자열 치환 → 바로 거부 (Edit/Write 도구 안내)
 //   2) rm -r/-f, git reset --hard, git clean, git push --force, git checkout/restore . , Remove-Item -Recurse
-//      → 영향 범위를 재서 패널에 띄우고 진행/취소를 기다림
+//      → 영향 범위를 재서 패널에 상세를 띄우고, 선택 카드($.ui.ask)로 진행/취소를 묻는다
 // 호스트가 소스에서 on(...) 과 $.noun.method(...) 를 읽으므로 literal 로 쓰고, $ 를 받는 도우미는 최상위 함수로 둔다.
 // 세션 보드 플러그인의 두 번째 모듈이다. 엔진은 한 플러그인이 자기 패널에만 그리게 해서, 한 창(위 세션 보드, 아래 확인 카드)으로 쓰려고 옮겼다 (2026-11-16 사용자 결정)
 
@@ -12,7 +12,6 @@ import type { Register } from 'claude-code'
 
 // 세션 보드와 같은 패널을 쓴다. 확인할 것이 있을 때만 세션 보드 아래에 카드를 붙인다
 const PANE_ID = 'session-board'
-const HOLD_LIMIT_MS = 10 * 60 * 1000
 const LIST_MAX = 10
 
 // unknown: 영향 범위를 알 수 없는 경우. "없음"으로 단정하지 않고 모름 패널로 그린다.
@@ -21,8 +20,8 @@ const LIST_MAX = 10
 type Recover = ['err' | 'warn' | 'mute', string]
 type Report = { summary: string; lines: string[]; more?: number; note?: string; unknown?: boolean; recover?: Recover[]; facts?: [string, string][] }
 type Risk = { kind: string; label: string; targets?: string[]; args?: string[]; dir?: string }
-// cwd: 영향을 잰 폴더. showCommand: 명령 펼침. leftMs: 기다릴 수 있는 남은 시간.
-type Held = { command: string; risk: Risk; report: Report | null; decision: string | null; where: 'pane' | 'band'; cwd: string; showCommand: boolean; leftMs: number }
+// cwd: 영향을 잰 폴더. showCommand: 명령 펼침.
+type Held = { command: string; risk: Risk; report: Report | null; decision: string | null; where: 'pane' | 'band'; cwd: string; showCommand: boolean }
 
 // 붙잡고 있는 호출. 한 번에 하나만.
 let held: Held | null = null
@@ -78,7 +77,7 @@ async function guard($: any, e: any, next: any, tool: 'Bash' | 'PowerShell') {
     return { deny: 'edit-guard: 이 명령을 붙잡았지만 턴이 중단되어 실행하지 않았습니다. 사용자가 요청하기 전에는 다시 시도하지 마세요.' }
   }
 
-  const mine: Held = { command, risk, report: null, decision: null, where: 'pane', cwd: '', showCommand: false, leftMs: HOLD_LIMIT_MS }
+  const mine: Held = { command, risk, report: null, decision: null, where: 'pane', cwd: '', showCommand: false }
   held = mine
   let isPlaced = false
   let summary = risk.label
@@ -101,20 +100,13 @@ async function guard($: any, e: any, next: any, tool: 'Bash' | 'PowerShell') {
     if (!isPlaced) mine.where = 'band' // 패널을 못 그리는 좁은 화면이면 입력창 위 띠로 대신 그린다
     $.ui.invalidate('ui.render')
 
-    const startedAt: number = await $.clock.now()
-    while (mine.decision === null) {
-      mine.leftMs = HOLD_LIMIT_MS - ((await $.clock.now()) - startedAt)
-      if (mine.leftMs <= 0) {
-        mine.decision = 'timeout'
-        break
-      }
-      if (next.signal?.aborted) {
-        mine.decision = 'interrupted'
-        break
-      }
-      // 남은 시간과 명령 펼침 상태를 다시 그린다.
-      $.ui.invalidate('ui.render')
-      await pause($)
+    // 결정은 엔진의 선택 카드로 받는다. 패널 카드는 원격 화면(휴대폰, claude.ai)에 안 그려져 답을 못 받았다 (2026-11-18 사용자 결정)
+    // 일반 선택 카드처럼 답할 때까지 기다린다. 진행 단추를 정확히 고를 때만 실행한다. 닫거나 다른 글을 쓰면 취소다
+    const ask = askOf(risk, mine.report)
+    try {
+      mine.decision = (await $.ui.ask(ask.question, { options: ask.options, header: '위험 명령' })) === ask.proceed ? 'proceed' : 'cancel'
+    } catch {
+      mine.decision = next.signal?.aborted ? 'interrupted' : 'cancel'
     }
   } catch {
     // 중단이면 interrupted, 그 밖의 예외는 안전하게 거부한다.
@@ -131,8 +123,7 @@ async function guard($: any, e: any, next: any, tool: 'Bash' | 'PowerShell') {
   }
   const why =
     ({
-      cancel: '사용자가 취소를 눌렀습니다',
-      timeout: '10분 안에 답이 없었습니다',
+      cancel: '사용자가 취소했습니다',
       interrupted: '턴이 중단되었습니다',
       error: 'edit-guard 에서 오류가 났습니다',
     } as Record<string, string>)[mine.decision ?? ''] ?? '답이 기록되지 않았습니다'
@@ -638,12 +629,16 @@ const CMD_LINES = 6
 const RECOVER_COLOR: Record<string, string | undefined> = { err: 'error', warn: 'warning', mute: undefined }
 const BADGE: Record<string, string> = { M: 'warning', A: 'success', D: 'error' }
 
-function clock(ms: number): string {
-  const s = Math.max(0, Math.ceil(ms / 1000))
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+/** 선택 카드의 질문과 단추. 취소를 먼저 둔다. 영향을 모르면 "그래도 진행"이다. */
+export function askOf(risk: Risk, report: Report): { question: string; options: string[]; proceed: string } {
+  const unknown = report.unknown === true
+  const title = unknown ? '영향 범위 모름' : (TITLE[risk.kind] ?? risk.label)
+  const recover = report.recover?.[0]?.[1]
+  const proceed = unknown ? '그래도 진행' : '진행'
+  return { question: `${title}: ${report.summary}. ${recover ? `${recover}. ` : ''}진행할까?`, options: ['취소', proceed], proceed }
 }
 
-// 시안의 읽는 순서: 영향(큰 글씨) → 복구 → 위치 → 목록 → 명령 → 버튼 → 남은 시간.
+// 시안의 읽는 순서: 영향(큰 글씨) → 복구 → 위치 → 목록 → 명령 → 선택 카드 안내.
 // 명령은 접어 두고, 영향을 모를 때만 처음부터 펼친다. compact 는 패널을 못 놓는 창(입력창 위)용 한 줄 구성이다.
 export function draw(t: any, state: Held, compact = false, surface = 'desktop') {
   // 데스크톱·터미널 모두 앱 기본 부품으로 그린다: 세션 보드 칸과 같은 결재함 틀(얇은 칸, ● 머리글, 테마 뜻 색)이다 (2026-11-16 사용자 결정 B안)
@@ -657,20 +652,8 @@ export function draw(t: any, state: Held, compact = false, surface = 'desktop') 
     const q = p.replace(/\\/g, '/')
     return cwd !== '' && q.startsWith(`${cwd}/`) ? q.slice(cwd.length + 1) : q
   }
-  // 버튼은 이 패널이 그려진 그 호출에만 답한다. 취소를 왼쪽에 두고 강조한다.
-  const decide = (choice: string) => () => {
-    if (state.decision === null) state.decision = choice
-  }
-  const proceedLabel = unknown ? '그래도 진행' : '진행'
-  const buttons = Box({
-    key: 'buttons',
-    gap: 2,
-    children: [
-      Button({ key: 'cancel', label: '취소', hotkey: '1', variant: 'primary', autoFocus: true, onPress: decide('cancel') }),
-      Button({ key: 'proceed', label: proceedLabel, hotkey: '2', variant: 'secondary', onPress: decide('proceed') }),
-    ],
-  })
-  const wait = Text({ key: 'wait', dimColor: true, size: 'caption', children: `Claude 가 기다리는 중 · ${clock(state.leftMs)} 남음` })
+  // 결정은 선택 카드가 받는다. 패널은 상세만 보이고 어디서 답하는지 알린다
+  const wait = Text({ key: 'wait', dimColor: true, size: 'caption', children: 'Claude 가 기다리는 중 · 선택 카드에서 진행·취소를 고른다' })
   const title = unknown ? '? 영향 범위 모름' : `⚠ ${TITLE[state.risk.kind] ?? state.risk.label}`
   const titleColor = unknown ? 'inactive' : 'warning'
   // 모름은 빨강(위험 단정)이 아니라 평범한 글자색으로 그린다.
@@ -696,7 +679,6 @@ export function draw(t: any, state: Held, compact = false, surface = 'desktop') 
         }),
         // 영향을 모를 때는 무엇을 승인하는지 보이도록 명령 첫 줄을 보인다.
         unknown ? Text({ key: 'cmd1', mono: true, dimColor: true, wrap: 'truncate-end', children: `명령  ${lines[0]}${lines.length > 1 ? ' …' : ''}` }) : null,
-        buttons,
         wait,
       ],
     })
@@ -755,7 +737,6 @@ export function draw(t: any, state: Held, compact = false, surface = 'desktop') 
       // 모름 패널은 명령 상자만 항상 보이고 접기 버튼이 없다(시안 C).
       unknown ? null : Button({ key: 'cmdtoggle', label: state.showCommand ? '▾ 명령 접기' : '▸ 명령 보기', plain: true, dimColor: true, onPress: () => { state.showCommand = !state.showCommand } }),
       boxed ? Box({ key: 'cmdbox', flexDirection: 'column', gap: 1, backgroundColor: 'userMessageBackground', borderStyle: 'round', borderColor: 'inactive', paddingX: 1, children: [...factRows, Text({ key: 'cmd', mono: true, wrap: 'wrap', children: cmd })] }) : null,
-      buttons,
       wait,
       ] }),
     ],

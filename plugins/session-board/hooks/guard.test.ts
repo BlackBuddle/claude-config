@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { classify, corruptReason, draw, measure } from './guard'
+import { askOf, classify, corruptReason, draw, measure } from './guard'
 
 // 요소 생성기를 그대로 돌려주는 가짜 표: 그리는 함수가 어떤 글자를 내는지만 본다.
 const fake = { Box: (p: any) => p, Text: (p: any) => p, Button: (p: any) => p }
@@ -13,14 +13,22 @@ test('확인 패널은 영향 → 복구 → 위치 순이고 명령은 접혀 �
   expect(json.indexOf('위치')).toBeLessThan(json.indexOf('a.txt'))
   expect(json).toContain('▸ 명령 보기')
   expect(json).not.toContain('rm -rf build') // 접힌 명령은 그리지 않는다
-  expect(json).toContain('9:42 남음')
   expect(json).toContain('"a.txt"') // 폴더 앞부분은 뺀 상대 경로
-  // 취소는 왼쪽에 두고 강조한다
-  expect(json.indexOf('"취소"')).toBeLessThan(json.indexOf('"진행"'))
-  // 단축키 번호도 버튼 순서와 같다
-  expect(json).toContain('"label":"취소","hotkey":"1"')
-  expect(json).toContain('"label":"진행","hotkey":"2"')
-  expect(json).toContain('"variant":"primary"')
+  // 결정은 선택 카드가 받는다 (원격 화면에는 패널 카드가 안 보인다, 2026-11-18). 패널에는 단추와 남은 시간이 없다
+  expect(json).toContain('선택 카드')
+  expect(json).not.toContain('hotkey')
+  expect(json).not.toContain('남음')
+})
+
+test('선택 카드는 영향과 복구를 담고, 취소가 먼저다', () => {
+  const a = askOf({ kind: 'rm', label: 'rm -rf' }, { summary: '파일 921개 · 17 MB 삭제', lines: [], recover: [['warn', '⚠ 휴지통을 거치지 않습니다']] })
+  expect(a.question).toBe('삭제 확인: 파일 921개 · 17 MB 삭제. ⚠ 휴지통을 거치지 않습니다. 진행할까?')
+  expect(a.options).toEqual(['취소', '진행'])
+  expect(a.proceed).toBe('진행')
+  // 영향을 모르면 진행 단추 이름이 다르다
+  const u = askOf({ kind: 'rm', label: 'rm -rf' }, { summary: '지울 대상을 확인하지 못했습니다', lines: [], unknown: true })
+  expect(u.question).toBe('영향 범위 모름: 지울 대상을 확인하지 못했습니다. 진행할까?')
+  expect(u.options).toEqual(['취소', '그래도 진행'])
 })
 
 test('git 변경 목록은 글자 배지와 해시로 나눠 그린다', () => {
@@ -36,7 +44,6 @@ test('모름 패널은 명령을 펼치고 변수를 오류 색으로 낸다', (
     draw(fake, held({ summary: '지울 대상을 확인하지 못했습니다', lines: [], unknown: true, facts: [['원인', '변수 $D 를 풀지 못했습니다']] }, { showCommand: true, command: 'rm -rf "$D"' })) as any,
   )
   expect(json).toContain('영향 범위 모름')
-  expect(json).toContain('그래도 진행')
   expect(json).toContain('원인')
   expect(json).toMatch(/"color":"error"[^}]*"children":"\$D"/) // 명령 안의 $D
   // 시안 C: 위치 줄과 접기 버튼이 없고 명령 상자만 항상 보인다
@@ -72,7 +79,6 @@ test('데스크톱 확인 카드는 세션 보드 칸과 같은 틀이다: 얇�
   expect(json).not.toContain('#') // 색은 모두 테마 이름이다
   expect(json).toContain('"weight":"semibold"') // 제목은 크지 않은 굵은 글
   expect(json).not.toContain('"size":"title"')
-  expect(json.indexOf('"label":"취소"')).toBeLessThan(json.indexOf('"label":"진행"'))
   const unknown = JSON.stringify(draw(fakeSvg, held({ summary: '모름', lines: [], unknown: true }) as any))
   expect(unknown).toContain('● 영향 범위 모름') // 모름은 흐린 글자로, 안전으로 읽히지 않게 글로 쓴다
   expect(unknown).not.toMatch(/"color":"error"[^}]*"children":"● 영향/)
