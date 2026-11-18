@@ -9,7 +9,7 @@
 | 이름 | 종류 | 나타나는 곳 | 하는 일 |
 |---|---|---|---|
 | [session-board](plugins/session-board) | 모드 | 오른쪽 패널, 입력창 위 한 줄 | 패널: 세션 상태와 사용자를 기다리는 결재·알림·확인(위), 실행 중인 하위 에이전트(가운데), 위험한 삭제·git 명령의 확인 카드(아래). 띠: 고양이 옆 결재·알림 개수 단추(누르면 패널), 검증 결과, 하위 에이전트 수, 컨텍스트, 주간 한도와 오늘 권장량, 턴 시간, 캐시. |
-| [relay-skills](plugins/relay-skills) | 스킬 | 직접 입력할 때만 | `/handoff`: 실행한 명령의 결과를 본 것만 "완료"로 적는 인계 문서(`HANDOFF.md`, 최신 1개). `/ship`: 커밋·push 직전 점검표(원격 먼저, 비밀 정보, 테스트, 결정 기록, 문서). |
+| [relay-skills](plugins/relay-skills) | 스킬 | 직접 입력할 때만 | `/handoff`: 실행한 명령의 결과를 본 것만 "완료"로 적는 인계 문서(`HANDOFF.md`, 최신 1개). `/recall`: 지난 결정·작업을 결정 기록·HANDOFF·git·세션 기록에서 찾아 출처와 함께 답한다. `/ship`: 커밋·push 직전 점검표(원격 먼저, 비밀 정보, 테스트, 결정 기록, 문서). |
 | [relay-agents](plugins/relay-agents) | 에이전트 | 하위 에이전트 호출 | `relay-design`(Opus, high), `relay-build`(Opus, medium), `relay-review`(Opus, high). 모델과 노력 수준이 파일에 고정되어 상한선이 됩니다. |
 
 ## 설치
