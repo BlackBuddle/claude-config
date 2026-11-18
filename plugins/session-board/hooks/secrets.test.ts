@@ -25,3 +25,13 @@ test('셸 명령에서 비밀 파일 읽기를 찾는다', () => {
   expect(secretInCommand('cat .env.example')).toBe(null)
   expect(secretInCommand('git status')).toBe(null)
 })
+
+test('검색 패턴 속 정규식 글자는 파일로 보지 않는다', () => {
+  // 2026-11-18 오탐: 검색 패턴의 \.env 를 파일로 읽어 막았다
+  expect(secretInCommand(`git ls-files | Select-String -Pattern '\\.credentials|(^|/)\\.env'`)).toBe(null)
+  expect(secretInCommand('grep -E "\\.env$" list.txt')).toBe(null)
+  // 경로는 그대로 막는다: 드라이브 경로, 상대 경로, UNC 경로
+  expect(secretInCommand('Get-Content C:\\proj\\.env')).toBe('.env')
+  expect(secretInCommand('cat .\\.env')).toBe('.env')
+  expect(secretInCommand('type \\\\server\\share\\.env')).toBe('.env')
+})

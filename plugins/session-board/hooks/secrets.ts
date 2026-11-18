@@ -18,7 +18,10 @@ export function secretPath(path: string): string | null {
 export function secretInCommand(command: string): string | null {
   if (!READ_VERB.test(command)) return null
   for (const token of command.split(/[\s;|&()<>]+/)) {
-    const hit = secretPath(token.replace(/^['"]|['"]$/g, ''))
+    const word = token.replace(/^['"]|['"]$/g, '')
+    // 백슬래시 1개로 시작하면 검색 패턴의 정규식(\.env)이다. 경로는 C:\, .\, \\server(UNC)로 시작한다
+    if (/^\\(?!\\)/.test(word)) continue
+    const hit = secretPath(word)
     if (hit !== null) return hit
   }
   return null
