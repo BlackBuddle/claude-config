@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" width="1280" height="400" role="img" aria-labelledby="t d">
+  <title id="t">claude-config</title>
+  <desc id="d">Claude Code 작업 흐름 5단계: 메시지 입력, 훅 알림, 스킬 선택, 하위 에이전트, 검토 제안. 알림 훅은 2단계에 끼어든다.</desc>
+  <defs>
+    <radialGradient id="desk" cx="0" cy="0.3" r="1.1">
+      <stop offset="0" stop-color="#fbf9f6"/>
+      <stop offset="0.62" stop-color="#efebe6"/>
+    </radialGradient>
+    <filter id="cast" x="-5%" y="-5%" width="115%" height="120%">
+      <feDropShadow dx="6" dy="5" stdDeviation="6" flood-color="#4a3a30" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+  <rect width="1280" height="400" fill="url(#desk)"/>
+  <g font-family="'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" fill="#22191a">
+    <text x="64" y="132" font-size="64" font-weight="600" letter-spacing="-2">claude-config</text>
+    <text x="64" y="184" font-size="26" fill="#5b5048">Claude Code 개인 설정 묶음. setup.ps1 하나로 설치한다.</text>
+  </g>
+  <g filter="url(#cast)">
+    <rect x="64" y="232" width="1152" height="120" rx="8" fill="#fdfcfa" stroke="#d9d2cb" stroke-width="1"/>
+  </g>
+  <g font-family="'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="20" fill="#6e635b">
+    <line x1="112" y1="276" x2="1168" y2="276" stroke="#cdc5bd" stroke-width="1"/>
+    <g text-anchor="start">
+      <circle cx="112" cy="276" r="9" fill="#fdfcfa" stroke="#cdc5bd"/><text x="104" y="316">메시지 입력</text>
+      <circle cx="376" cy="276" r="9" fill="#c4442f"/><text x="368" y="316" fill="#22191a" font-weight="600">훅 알림</text>
+      <text x="446" y="318" fill="#c4442f" font-weight="600" transform="rotate(-3 446 318)">여기</text>
+      <circle cx="640" cy="276" r="9" fill="#fdfcfa" stroke="#cdc5bd"/><text x="632" y="316">스킬 선택</text>
+      <circle cx="904" cy="276" r="9" fill="#fdfcfa" stroke="#cdc5bd"/><text x="896" y="316">하위 에이전트</text>
+      <circle cx="1168" cy="276" r="9" fill="#fdfcfa" stroke="#cdc5bd"/><text x="1080" y="316">검토 제안</text>
+    </g>
+  </g>
+</svg>

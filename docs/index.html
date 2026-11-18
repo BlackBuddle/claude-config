@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>claude-config</title>
+<meta name="description" content="Claude Code 개인 설정 묶음. 규칙, 선택표, 에이전트, 스킬, 훅을 setup.ps1 하나로 설치한다.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Geist+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+/* Hallmark · shape: Workbench · genre: modern-minimal · theme: Coral (deal 2/3, seed personal-claude-code-config-0e86·6e2e5d28·2026-11-18·r0) · job: try · draw: manual
+ * hero: Stage, text left and the bundle sheet right · nav: edge-aligned wordmark and two links · footer: a mast, the wordmark over the file links · imagery: the product built (the workflow line) · signature: pick a bundle, its stop on the workflow line is pressed in coral
+ * axes: light/grotesk-sans/warm · posture: restrained · contrast: pass · fold: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S4 R5 V4 · weakest: S, a config repo has no screenshots; the hero shows the real workflow stops each file touches instead of a picture */
+/* Hallmark · waive 26b · no control is ever disabled and no aria-disabled exists · every bundle radio and every link on this config page is always usable */
+/* Hallmark · waive 79 · the hero holds the bundle sheet beside the headline · the bundle sheet keeps its natural height; stretching it adds empty paper */
+/* Hallmark · dismissed 77 · a thin prompt: hero, install, safety board, file index and footer make five */
+@import url("./tokens.css");
+@import url("./base.css");
+
+h1, h2, h3, .flow, .bundles { word-break: keep-all; }
+
+.nav { display: flex; justify-content: space-between; align-items: center; gap: var(--space-md); padding-block: var(--space-lg); }
+.wordmark { font-weight: 600; font-size: var(--text-lg); text-decoration: none; letter-spacing: -0.02em; }
+.nav ul { display: flex; gap: var(--space-lg); list-style: none; margin: 0; padding: 0; }
+.nav a:not(.wordmark) { color: var(--color-ink-2); }
+
+.desk { background-color: var(--color-desk); background-image: radial-gradient(90% 120% at 0% 30%, var(--color-cotton), transparent 62%); }
+.hero { min-height: calc(100svh - 96px); display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--space-2xl); align-items: center; padding-block: var(--space-2xl) var(--space-3xl); }
+.hero h1 { font-size: var(--text-display-s); max-width: 12ch; }
+.hero .lead { margin-top: var(--space-lg); color: var(--color-ink-2); }
+.actions { display: flex; flex-wrap: wrap; gap: var(--space-md); margin-top: var(--space-xl); }
+
+.btn { display: inline-flex; align-items: center; min-height: 48px; padding: 0 var(--space-lg); border: 0; border-radius: var(--radius-stock); font-weight: 500; text-decoration: none; cursor: pointer; transition: transform var(--dur-short) var(--ease-out), box-shadow var(--dur-short) var(--ease-out); }
+.btn--ink { background: var(--color-board); color: var(--color-board-type); box-shadow: var(--cast-stock); }
+.quiet { align-self: center; color: var(--color-ink-2); text-decoration-color: var(--color-accent-2); }
+.btn:hover { transform: translateY(-1px); box-shadow: var(--edge-stock), var(--cast-stock-lift); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
+
+.stock { background-color: var(--color-cotton); color: var(--color-print); border-radius: var(--radius-card); box-shadow: var(--edge-stock), var(--cast-stock); }
+.sheet { padding: var(--space-xl); }
+.sheet fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.sheet legend { padding: 0; font-weight: 500; color: var(--color-muted); font-size: var(--text-sm); margin-bottom: var(--space-sm); }
+
+.bundles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-xs); padding: var(--space-2xs); border-radius: 12px; box-shadow: var(--press-groove); }
+.bundles label { position: relative; display: block; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-input); cursor: pointer; transition: transform var(--dur-short) var(--ease-out); }
+.bundles input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.bundles .name { display: block; font-weight: 500; }
+.bundles .path { display: block; font-family: var(--font-outlier); font-size: var(--text-xs); color: var(--color-muted); overflow-wrap: anywhere; }
+.bundles label:hover { transform: translateY(-1px); }
+.bundles label:has(input:checked) { background: var(--color-paper); box-shadow: var(--edge-stock), var(--cast-stock); }
+.bundles label:has(input:focus-visible) { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+
+.flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); list-style: none; margin: var(--space-xl) 0 0; padding: 0; counter-reset: stop; }
+.flow li { position: relative; padding-top: var(--space-lg); padding-right: var(--space-xs); font-size: var(--text-sm); color: var(--color-muted); counter-increment: stop; }
+.flow li::before { content: ""; position: absolute; top: 7px; left: 0; right: 0; border-top: var(--rule-hair) solid var(--color-rule-2); }
+.flow li::after { content: counter(stop); position: absolute; top: 0; left: 0; display: grid; place-items: center; width: 16px; height: 16px; border-radius: var(--radius-pill); background: var(--color-cotton); box-shadow: 0 0 0 1px var(--color-rule-2); font-family: var(--font-outlier); font-size: 10px; color: var(--color-muted); }
+.flow .here { display: block; margin-top: var(--space-2xs); font-weight: 600; color: var(--color-paid); transform: rotate(-3deg); }
+.flow[data-stop="1"] li:nth-child(1), .flow[data-stop="2"] li:nth-child(2), .flow[data-stop="3"] li:nth-child(3), .flow[data-stop="4"] li:nth-child(4), .flow[data-stop="5"] li:nth-child(5) { color: var(--color-print); font-weight: 500; }
+.flow[data-stop="1"] li:nth-child(1)::after, .flow[data-stop="2"] li:nth-child(2)::after, .flow[data-stop="3"] li:nth-child(3)::after, .flow[data-stop="4"] li:nth-child(4)::after, .flow[data-stop="5"] li:nth-child(5)::after { background: var(--color-paid); color: var(--color-cotton); box-shadow: none; }
+.note { display: block; margin-top: var(--space-lg); padding-top: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); min-height: 4.5em; }
+.note a { font-family: var(--font-outlier); font-size: var(--text-sm); text-decoration-color: var(--color-accent-2); }
+
+section { padding-block: var(--section-gap-s); }
+.split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--space-2xl); align-items: start; }
+.split > p { margin-top: var(--space-md); color: var(--color-ink-2); }
+
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
+.steps li { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: var(--space-md); padding-block: var(--space-lg); border-top: var(--rule-hair) solid var(--color-rule); counter-increment: step; }
+.steps li:last-child { border-bottom: var(--rule-hair) solid var(--color-rule); }
+.steps li::before { content: counter(step); font-family: var(--font-outlier); font-size: var(--text-2xl); line-height: 1; color: var(--color-muted); }
+.steps p { margin-top: var(--space-2xs); color: var(--color-ink-2); }
+pre { margin: var(--space-sm) 0 0; padding: var(--space-md); border-radius: var(--radius-input); background: var(--color-board); color: var(--color-board-type); font-family: var(--font-outlier); font-size: var(--text-sm); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+code { font-family: var(--font-outlier); font-size: 0.92em; }
+
+.index { margin: 0; }
+.index div { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--space-md); padding-block: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); }
+.index dt a { font-family: var(--font-outlier); font-size: var(--text-sm); text-decoration-color: var(--color-accent-2); }
+.index dd { margin: 0; color: var(--color-ink-2); }
+
+.board { background: var(--color-board); color: var(--color-board-type); }
+.board .index dd { color: var(--color-board-type); }
+.board .index div { border-color: color-mix(in oklab, var(--color-board-type) 18%, transparent); }
+
+.foot { padding-block: var(--space-2xl); }
+.foot .wordmark { font-size: var(--text-2xl); }
+.foot ul { display: flex; flex-wrap: wrap; gap: var(--space-md) var(--space-lg); list-style: none; margin: var(--space-md) 0 0; padding: 0; }
+.foot li { color: var(--color-muted); }
+
+@media (max-width: 60rem) {
+  .hero, .split { grid-template-columns: minmax(0, 1fr); gap: var(--space-xl); }
+}
+@media (max-width: 40rem) {
+  .sheet { padding: var(--space-md); }
+  .bundles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .flow { grid-template-columns: minmax(0, 1fr); gap: var(--space-xs); }
+  .flow li { padding: 0 0 0 var(--space-xl); min-height: 24px; }
+  .flow li::before { display: none; }
+  .flow .here { display: inline; margin: 0 0 0 var(--space-xs); }
+  .index div { grid-template-columns: minmax(0, 1fr); gap: var(--space-2xs); }
+  .nav ul { gap: var(--space-md); }
+}
+</style>
+</head>
+<body>
+<header class="desk">
+  <nav class="nav container" aria-label="주 메뉴">
+    <a class="wordmark" href="./">claude-config</a>
+    <ul>
+      <li><a href="#install">설치</a></li>
+      <li><a href="https://github.com/Dawnilove/claude-config">GitHub</a></li>
+    </ul>
+  </nav>
+  <div class="hero container">
+    <div>
+      <h1>Claude Code 작업 흐름을 한 묶음으로</h1>
+      <p class="lead">묶음 하나를 고르면, 그 묶음이 끼어드는 단계가 표시됩니다.</p>
+      <div class="actions">
+        <a class="btn btn--ink" href="#install">설치 3단계 보기</a>
+        <a class="quiet" href="https://github.com/Dawnilove/claude-config">저장소 열기</a>
+      </div>
+    </div>
+    <div class="stock sheet">
+      <fieldset>
+        <legend>묶음을 고릅니다</legend>
+        <div class="bundles">
+          <label><input type="radio" name="bundle" value="rules" data-stop="1" data-file="CLAUDE.md" data-note="세션이 시작될 때 읽힙니다. 언어, 작업 방식, 노력 수준 같은 모든 답의 바탕 규칙입니다."><span class="name">전역 규칙</span><span class="path">CLAUDE.md</span></label>
+          <label><input type="radio" name="bundle" value="hook" data-stop="2" data-file="hooks/reminder.txt" data-note="메시지를 보낼 때마다 실행됩니다. 규칙 4개(선택표, 요약, 검토, 한국어)를 Claude에게 다시 알립니다." checked><span class="name">알림 훅</span><span class="path">hooks/</span></label>
+          <label><input type="radio" name="bundle" value="design-table" data-stop="3" data-file="docs/디자인_스킬_선택표.md" data-note="디자인 요청이 오면 이 표로 스킬 1개를 고릅니다. 기억으로 고르지 않습니다."><span class="name">디자인 선택표</span><span class="path">docs/</span></label>
+          <label><input type="radio" name="bundle" value="clash" data-stop="3" data-file="skills/design-clash/SKILL.md" data-note="큰 디자인 작업에서 스킬 3개로 시안 3개를 만들고, 선택기에서 비교해 1개를 고릅니다."><span class="name">design-clash</span><span class="path">skills/</span></label>
+          <label><input type="radio" name="bundle" value="summarizer" data-stop="4" data-file="agents/summarizer.md" data-note="300줄이 넘는 파일이나 로그를 Haiku 하위 에이전트가 읽고 결론만 돌려줍니다."><span class="name">요약 에이전트</span><span class="path">agents/</span></label>
+          <label><input type="radio" name="bundle" value="review-table" data-stop="5" data-file="docs/검토_선택표.md" data-note="작업이 끝나면 이 표로 검토 명령 1개를 제안합니다. 사용자가 승인한 뒤 실행합니다."><span class="name">검토 선택표</span><span class="path">docs/</span></label>
+        </div>
+      </fieldset>
+      <ol class="flow" data-stop="2" aria-label="작업 흐름">
+        <li>메시지 입력</li>
+        <li>훅 알림<span class="here" aria-hidden="true">여기</span></li>
+        <li>스킬 선택</li>
+        <li>하위 에이전트</li>
+        <li>검토 제안</li>
+      </ol>
+      <output class="note" aria-live="polite"><span id="note-text">2단계 훅 알림. 메시지를 보낼 때마다 실행됩니다. 규칙 4개(선택표, 요약, 검토, 한국어)를 Claude에게 다시 알립니다.</span><br><a id="note-link" href="https://github.com/Dawnilove/claude-config/blob/main/hooks/reminder.txt">hooks/reminder.txt</a></output>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="install">
+    <div class="container split">
+      <div>
+        <h2>setup.ps1로 설치합니다</h2>
+        <p>Windows PowerShell 기준입니다. 처음 1번만 합니다.</p>
+      </div>
+      <ol class="steps">
+        <li><div><h3>도구를 준비합니다</h3><p>Git, GitHub CLI(<code>gh</code>), Claude Code를 설치합니다. 그다음 <code>gh auth login</code>을 실행합니다.</p></div></li>
+        <li><div><h3>명령 1줄을 실행합니다</h3>
+<pre><code>gh repo clone Dawnilove/claude-config "$env:USERPROFILE\claude-config"; powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\claude-config\setup.ps1"</code></pre></div></li>
+        <li><div><h3>앱을 완전히 종료하고 다시 시작합니다</h3><p>Claude Code와 데스크톱 앱 모두 다시 시작합니다. 환경 변수는 새 프로세스부터 적용됩니다.</p></div></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="board">
+    <div class="container split">
+      <h2>기존 설정을 덮어쓰지 않습니다</h2>
+      <dl class="index">
+        <div><dt><code>CLAUDE.md</code></dt><dd>공통 규칙은 <code>CLAUDE.shared.md</code>로 복사합니다. 그 컴퓨터의 파일에는 가져오기 1줄만 추가합니다.</dd></div>
+        <div><dt><code>settings.json</code></dt><dd>훅 1개와 언어 설정만 추가합니다. 고치기 전의 파일은 <code>settings.json.bak-setup</code>으로 남깁니다.</dd></div>
+        <div><dt>플러그인</dt><dd>이미 설치된 플러그인은 건너뜁니다.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section>
+    <div class="container split">
+      <h2>들어 있는 것</h2>
+      <dl class="index">
+        <div><dt><a href="https://github.com/Dawnilove/claude-config/blob/main/CLAUDE.md">CLAUDE.md</a></dt><dd>전역 규칙</dd></div>
+        <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/docs">docs/</a></dt><dd>규칙 본문과 선택표 2개</dd></div>
+        <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/agents">agents/</a></dt><dd>요약 에이전트</dd></div>
+        <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/skills">skills/</a></dt><dd>design-clash, stageshow 등 로컬 스킬</dd></div>
+        <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/hooks">hooks/</a></dt><dd>알림 훅의 문구</dd></div>
+        <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/plugins">plugins/</a></dt><dd>session-board, relay-skills 등 직접 만든 플러그인</dd></div>
+      </dl>
+    </div>
+  </section>
+</main>
+
+<footer class="foot container">
+  <a class="wordmark" href="./">claude-config</a>
+  <ul>
+    <li><a href="https://github.com/Dawnilove/claude-config#readme">저장소 안내</a></li>
+    <li><a href="https://github.com/Dawnilove/claude-config/blob/main/setup.ps1">setup.ps1</a></li>
+    <li><a href="https://github.com/Dawnilove/claude-config/blob/main/plugins/README.md">plugins/README.md</a></li>
+  </ul>
+</footer>
+
+<script>
+(() => {
+  const flow = document.querySelector('.flow');
+  const text = document.getElementById('note-text');
+  const link = document.getElementById('note-link');
+  const here = flow.querySelector('.here');
+  const stops = [...flow.children].map((li) => li.firstChild.textContent.trim());
+  document.querySelectorAll('.bundles input').forEach((input) => {
+    input.addEventListener('change', () => {
+      const n = input.dataset.stop;
+      flow.dataset.stop = n;
+      flow.children[n - 1].append(here);
+      text.textContent = `${n}단계 ${stops[n - 1]}. ${input.dataset.note}`;
+      link.textContent = input.dataset.file;
+      link.href = `https://github.com/Dawnilove/claude-config/blob/main/${input.dataset.file}`;
+    });
+  });
+})();
+</script>
+</body>
+</html>

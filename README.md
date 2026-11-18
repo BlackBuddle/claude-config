@@ -1,13 +1,23 @@
-﻿# claude-config
+﻿<img src="docs/banner.svg" alt="claude-config 배너: Claude Code 작업 흐름 5단계와 알림 훅이 끼어드는 자리" width="100%">
+
+# claude-config
 
 Claude Code 개인 설정 묶음. 다른 컴퓨터에 같은 환경을 만든다.
+
+사이트: https://dawnilove.github.io/claude-config/ (묶음을 누르면 작업 흐름의 어느 단계에 끼어드는지 보인다)
+
+설치 3단계 (자세한 설명은 [2절](#2-새-컴퓨터에-설치한다-처음-1번)):
+
+1. Git, GitHub CLI(`gh`), Claude Code를 설치하고 `gh auth login`을 실행한다.
+2. PowerShell에서 [2-2절](#2-2-설치한다-powershell-명령-1줄)의 명령 1줄을 실행한다. 저장소를 받고 `setup.ps1`을 실행한다.
+3. Claude Code와 데스크톱 앱을 완전히 종료하고 다시 시작한다.
 
 ## 1. 들어 있는 것
 
 | 경로 | 내용 |
 |---|---|
 | `CLAUDE.md` | 전역 규칙 (언어, 작업 방식, 코드 유지보수 책임, 노력 수준, 선택표 사용) |
-| `docs/` | 규칙의 본문 5개: 노력 수준, 작업 방식, 요약 시스템, 디자인 스킬 선택표, 검토 선택표 |
+| `docs/` | 규칙의 본문 5개: 노력 수준, 작업 방식, 요약 시스템, 디자인 스킬 선택표, 검토 선택표. 사이트(`index.html`)도 이 폴더에 있다. 설치는 `.md`만 복사한다 |
 | `agents/summarizer.md` | 요약 에이전트 |
 | `skills/stageshow/` | 로컬 스킬 (계정에 올리면 이 사본은 필요 없다) |
 | `skills/design-clash/` | 로컬 스킬. 디자인 스킬 3개로 시안 3개를 따로 만들고 선택기에서 비교한다. 명령: `/design-clash` |
@@ -35,7 +45,7 @@ gh repo clone Dawnilove/claude-config "$env:USERPROFILE\claude-config"; powershe
 
 끝난 뒤 Claude Code와 데스크톱 앱을 **완전히 종료하고 다시 시작한다.** 환경 변수(6단계)는 새로 시작한 프로세스부터 적용된다. 창만 닫으면 앱이 백그라운드에 남아 적용되지 않는다.
 
-주의: 저장소가 비공개라서 `gh auth login`을 하지 않으면 `gh repo clone`이 실패한다. 설치 명령은 한 줄이다. 따로 `git pull`을 하지 않는다. 폴더가 아직 없기 때문이다.
+주의: `gh`는 로그인해야 동작한다. `gh auth login`을 하지 않으면 `gh repo clone`이 실패한다. 설치 명령은 한 줄이다. 따로 `git pull`을 하지 않는다. 폴더가 아직 없기 때문이다.
 
 다른 방법: Claude Code에 "Dawnilove/claude-config 저장소를 받아 README대로 설치해 줘"라고 말한다.
 
@@ -148,7 +158,7 @@ Claude Code에 "전역 설정을 claude-config 저장소에 올려 줘"라고 �
 |---|---|
 | `fatal: cannot change to '...\claude-config'`가 나온다. `setup.ps1`이 없다고 나온다 | 그 컴퓨터에 저장소 폴더가 없다. 3절의 갱신 명령 대신 2-2절의 설치 명령을 실행한다. 다음부터 3절의 명령을 쓴다 |
 | `gh`를 찾을 수 없다 | GitHub CLI가 없다. `winget install GitHub.cli`로 설치한다. PowerShell을 다시 연다 |
-| 저장소를 받을 때 로그인을 요구한다. 저장소를 찾을 수 없다고 나온다 | 저장소가 비공개다. `gh auth login`으로 저장소 주인의 계정에 로그인한다 |
+| 저장소를 받을 때 로그인을 요구한다 | `gh`에 로그인하지 않았다. `gh auth login`을 실행한다 |
 | `git push`가 거절된다 | 다른 곳에서 먼저 올렸다. `git pull --rebase`를 실행한 뒤 다시 올린다 |
 | 계정 스킬이 안 보인다 | 데스크톱 앱에 같은 계정으로 로그인했는지 확인한다. 앱을 다시 시작한다 |
 | 규칙이 적용되지 않는다 | Claude Code를 다시 시작한다. 규칙은 새 세션부터 적용된다 |

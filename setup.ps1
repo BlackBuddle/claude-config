@@ -32,9 +32,12 @@ if ($isSource) {
 if ($isSource) {
     Write-Warning "Source computer: skipped copying docs, agents, skills, hooks. Copy them into this repo before you push."
 } else {
-    foreach ($d in 'docs', 'agents', 'skills', 'hooks') {
+    foreach ($d in 'agents', 'skills', 'hooks') {
         Copy-Item (Join-Path $src $d) $Target -Recurse -Force
     }
+    # docs also holds the GitHub Pages site. Only the .md rule files belong in ~/.claude.
+    New-Item -ItemType Directory -Force (Join-Path $Target 'docs') | Out-Null
+    Copy-Item (Join-Path $src 'docs\*.md') (Join-Path $Target 'docs') -Force
 }
 # decision-rack moved into the session-board plugin (plugins/session-board). Copy does not delete, so remove the old copy.
 $old = Join-Path $Target 'skills\decision-rack'
