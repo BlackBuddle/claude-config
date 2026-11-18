@@ -1,0 +1,105 @@
+/* 주행 다시 보기. 클래스는 replay-로 시작한다. 색은 아우라지 app.css의 변수만 쓴다. */
+.replay { display: flex; flex-direction: column; gap: 12px; color: var(--text); font-size: 14px; }
+.replay [hidden] { display: none !important; }
+.replay-body { display: flex; flex-direction: column; gap: 12px; }
+.replay-msg { color: var(--muted); }
+.replay-msg:empty, .replay-err:empty { display: none; }
+.replay-err { color: var(--bad); font-family: var(--mono); font-size: 13px; }
+.replay-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.replay-select { min-height: 40px; max-width: 100%; padding: 0 12px; border-radius: var(--r-ctl); border: 1px solid var(--line-strong); background: var(--card); color: var(--ink); font-size: 14px; font-weight: 600; cursor: pointer; text-overflow: ellipsis; }
+.replay-seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; overflow: hidden; gap: 1px; background: var(--line-strong); border: 1px solid var(--line-strong); border-radius: var(--r-ctl); }
+.replay-seg button { flex: 1 1 auto; min-height: 40px; padding: 0 14px; border: 0; background: var(--card); color: var(--sub); font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.replay-seg button[aria-pressed="true"] { background: var(--sel); color: var(--on-sel); }
+.replay-seg button:hover:not([aria-pressed="true"]) { background: var(--fill); }
+.replay-zoom { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; color: var(--sub); font-weight: 600; } /* 이름표 "확대" + 나눔 단추 4칸 */
+.replay-zoom .replay-seg button { min-width: 44px; padding: 0 10px; } /* 4칸이 좁은 폭(약 270 px)에서도 한 줄에 든다 */
+.replay-eps { display: flex; flex-wrap: wrap; gap: 6px; max-height: 128px; overflow-y: auto; }
+.replay-ep { min-height: 36px; padding: 0 12px; border-radius: var(--r-ctl); border: 1px solid var(--line-strong); background: var(--card); color: var(--sub); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; white-space: nowrap; }
+.replay-ep.ok { border-left: 4px solid var(--good); }
+.replay-ep.fail { border-left: 4px solid var(--bad); }
+.replay-ep:hover:not([aria-pressed="true"]) { background: var(--fill); }
+.replay-ep[aria-pressed="true"] { background: var(--sel); border-color: var(--sel); color: var(--on-sel); }
+.replay :is(button, select, input):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.replay-seg button:focus-visible { outline-offset: -2px; }
+
+/* 그림판 (anatomy의 plate): 위 두 귀 = 그림 번호·제목, 아래 두 귀 = 보기 이름·읽은 값 */
+.replay-plate { display: flex; flex-direction: column; gap: 10px; max-width: min(840px, 100vh - 120px); /* 정사각 지도가 화면 높이를 넘지 않게 */ margin: 0; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-box); }
+.replay-corners { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; color: var(--muted); font-family: var(--mono); font-size: 11px; line-height: 1.3; letter-spacing: .04em; }
+.replay-fig { color: var(--text); }
+.replay-fig, .replay-hint { flex: none; } /* 좁은 화면에서 보기 이름이 두 줄로 꺾이지 않는다 */
+.replay-read span { white-space: nowrap; } /* 읽은 값 1개가 가운데에서 꺾이지 않는다 */
+.replay-read { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px 12px; margin-left: auto; color: var(--text); font-variant-numeric: tabular-nums; }
+.replay-legend { display: grid; gap: 6px; max-width: min(840px, 100vh - 120px); color: var(--muted); font-size: 13px; line-height: 1.55; }
+.replay-keys { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.replay-key { display: inline-flex; align-items: center; gap: 7px; }
+.replay-mark { width: 16px; height: 10px; flex: none; overflow: visible; }
+.replay-svg { display: block; width: 100%; height: auto; }
+
+/* 그림: anatomy iso.css 규칙. 선 1종 0.6, 면은 바탕·옆면 4톤·윗면. 색은 아우라지 변수의 밝은 단계에 대응한다 */
+.replay-hull { fill: var(--card); }
+.replay-roof, .replay-face, .replay-solid { fill: var(--card); }
+.replay-floor { fill: var(--grid); } /* 바닥은 종이보다 한 단계 어둡다. 방이 한 덩어리로 보인다 */
+.replay-roof[data-low] { fill: var(--line); } /* 낮은 턱의 윗면 = 벽을 자른 면 */
+.replay-shade[data-shade="0"] { fill: var(--line-strong); }
+.replay-shade[data-shade="1"] { fill: var(--line); }
+.replay-shade[data-shade="2"] { fill: var(--fill); }
+.replay-shade[data-shade="3"] { fill: var(--field); }
+.replay-line, .replay-face, .replay-solid, .replay-slot, .replay-wheel { stroke-width: .6; stroke-linecap: round; stroke-linejoin: round; }
+.replay-line { fill: none; stroke: var(--gray); stroke-opacity: .6; }
+.replay-face, .replay-line[data-tone="hi"] { stroke: var(--sub); stroke-opacity: 1; }
+.replay-solid, .replay-line[data-tone="mid"] { stroke: var(--gray); stroke-opacity: 1; }
+.replay-face[data-tone="lo"] { stroke: var(--gray); stroke-opacity: .6; }
+.replay-line[data-tone="faint"] { stroke: var(--line-strong); stroke-opacity: 1; }
+.replay-dot { fill: var(--sub); opacity: .45; }
+/* 검은 차체: 금속 판은 어두운 변수 3단, 고무 궤도는 한 단계 더 어둡다. 안쪽 선은 밝게 긋는다 */
+.replay-black .replay-hull, .replay-black .replay-shade, .replay-slot { fill: var(--ink); }
+.replay-black .replay-shade:where([data-shade="2"], [data-shade="3"]), .replay-black .replay-track .replay-roof, .replay-black .replay-track.replay-face { fill: var(--text); }
+.replay-black .replay-roof, .replay-black .replay-face { fill: var(--sub); }
+.replay-black .replay-track .replay-shade, .replay-black .replay-lens :is(.replay-roof, .replay-shade), .replay-black .replay-lens.replay-face { fill: var(--ink); }
+.replay-black .replay-line, .replay-slot { stroke: var(--gray); stroke-opacity: 1; }
+.replay-black .replay-line:where([data-tone="hi"]), .replay-black .replay-face, .replay-wheel { stroke: var(--ink); }
+.replay-wheel, .replay-black .replay-dot { fill: var(--gray); opacity: 1; }
+/* 주황은 경로와 로봇의 센서 판에만 */
+.replay-black .replay-accent :is(.replay-hull, .replay-roof, .replay-shade), .replay-black .replay-accent.replay-face { fill: var(--accent); }
+.replay-black .replay-accent :is(.replay-shade[data-shade="0"], .replay-shade[data-shade="1"]) { fill: var(--accent-ink); }
+.replay-black .replay-accent .replay-line, .replay-black .replay-accent.replay-face { stroke: var(--accent-ink); }
+/* 경로: 남은 길은 가는 회색, 지나온 길은 시간 자 (띠·가장자리·가로대·가운데 선). 주황(--accent)은 가운데 선과 센서 판에만 */
+.replay-pad { fill: var(--card); }
+.replay-goal { fill: none; stroke: var(--sub); stroke-width: 1.2; }
+.replay-end { fill: none; stroke: var(--ink); stroke-width: 4; stroke-linecap: round; }
+.replay-rest { fill: none; stroke: var(--gray); stroke-width: .8; stroke-linejoin: round; }
+.replay-swath { fill: var(--accent-soft); }
+.replay-rail { fill: none; stroke: var(--accent-ink); stroke-width: .6; stroke-linejoin: round; }
+.replay-rung { fill: none; stroke: var(--accent-ink); stroke-width: 1.4; }
+.replay-path { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.replay-start { fill: none; stroke: var(--ink); stroke-width: 2; }
+/* 어두운 색: 윗면이 가장 밝고 옆면은 어두운 쪽으로 (anatomy의 어두운 테마와 같은 방향). 장애물의 옆면은 바닥과 비슷한 톤으로, 차체만 바닥보다 뚜렷하게 어둡게. :where()로 우선순위를 낮춰 주황 규칙이 이긴다 */
+:where(:root[data-theme="dark"]) .replay-roof, :where(:root[data-theme="dark"]) .replay-face, :where(:root[data-theme="dark"]) .replay-solid { fill: var(--line); }
+:where(:root[data-theme="dark"]) .replay-floor { fill: var(--hair); }
+:where(:root[data-theme="dark"]) .replay-roof[data-low] { fill: var(--card); }
+:where(:root[data-theme="dark"]) .replay-shade[data-shade="0"] { fill: var(--field); }
+:where(:root[data-theme="dark"]) .replay-shade[data-shade="1"] { fill: var(--fill); }
+:where(:root[data-theme="dark"]) .replay-shade[data-shade="2"] { fill: var(--hair); }
+:where(:root[data-theme="dark"]) .replay-shade[data-shade="3"] { fill: var(--grid); }
+:where(:root[data-theme="dark"]) .replay-line, :where(:root[data-theme="dark"]) .replay-face[data-tone="lo"] { stroke: var(--gray); stroke-opacity: .7; }
+:where(:root[data-theme="dark"]) .replay-line[data-tone="faint"] { stroke: var(--line-strong); stroke-opacity: 1; }
+:where(:root[data-theme="dark"]) .replay-line[data-tone="mid"], :where(:root[data-theme="dark"]) .replay-solid { stroke: var(--gray); stroke-opacity: 1; }
+:where(:root[data-theme="dark"]) .replay-line[data-tone="hi"], :where(:root[data-theme="dark"]) .replay-face { stroke: var(--sub); stroke-opacity: 1; }
+/* 어두운 색의 검은 차체: 바닥보다 어둡다. 테두리만 밝다 */
+:where(:root[data-theme="dark"]) .replay-black .replay-hull, :where(:root[data-theme="dark"]) .replay-black .replay-shade, :where(:root[data-theme="dark"]) .replay-slot, :where(:root[data-theme="dark"]) .replay-black .replay-track .replay-shade, :where(:root[data-theme="dark"]) .replay-black .replay-lens :is(.replay-roof, .replay-shade), :where(:root[data-theme="dark"]) .replay-black .replay-lens.replay-face { fill: var(--bg); }
+:where(:root[data-theme="dark"]) .replay-black .replay-shade:where([data-shade="2"], [data-shade="3"]), :where(:root[data-theme="dark"]) .replay-black .replay-track .replay-roof, :where(:root[data-theme="dark"]) .replay-black .replay-track.replay-face { fill: var(--card); }
+:where(:root[data-theme="dark"]) .replay-black .replay-roof, :where(:root[data-theme="dark"]) .replay-black .replay-face { fill: var(--field); }
+:where(:root[data-theme="dark"]) .replay-black .replay-line, :where(:root[data-theme="dark"]) .replay-slot { stroke: var(--gray); stroke-opacity: 1; }
+:where(:root[data-theme="dark"]) .replay-black .replay-line:where([data-tone="hi"]), :where(:root[data-theme="dark"]) .replay-black .replay-face { stroke: var(--muted); }
+:where(:root[data-theme="dark"]) .replay-wheel { stroke: var(--bg); }
+
+.replay-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+.replay-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 80px; min-height: 40px; padding: 0 16px; border-radius: var(--r-ctl); border: 1px solid var(--line-strong); background: var(--card); color: var(--ink); font-size: 14px; font-weight: 600; cursor: pointer; }
+.replay-btn:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--fill); }
+.replay-btn:disabled, .replay-time input:disabled { opacity: .5; cursor: not-allowed; }
+.replay-time { display: flex; flex: 1 1 200px; align-items: center; gap: 8px; color: var(--sub); font-weight: 600; }
+.replay-time input { flex: 1; min-width: 0; min-height: 40px; accent-color: var(--accent); }
+
+@media (max-width: 900px) {
+  .replay-btn, .replay-select, .replay-seg button, .replay-ep, .replay-time input { min-height: 44px; }
+}
