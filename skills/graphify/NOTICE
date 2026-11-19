@@ -1,0 +1,10 @@
+Graphify
+Copyright 2026 Safi Shamsi and the Graphify contributors.
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Portions of this software were contributed under the MIT License prior to the
+relicensing and remain available under those terms. The original MIT license
+text is retained in LICENSE-MIT.
+
+This copy of the skill (from graphifyy 0.9.112) changes only the description line in SKILL.md: used via /graphify, and automatically only where graphify-out/graph.json exists (2026-11-19).

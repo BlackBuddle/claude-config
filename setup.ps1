@@ -121,5 +121,16 @@ if (-not $SkipPlugins) {
     claude plugin install egm@egm
     claude plugin marketplace add openai/codex-plugin-cc
     claude plugin install codex@openai-codex   # needs the codex CLI and 'codex login' (done by the user)
+    # graphify: code knowledge graph, used only via /graphify (skill copied from skills\graphify, no hooks).
+    # Not 'graphify install': it appends to CLAUDE.md. uv's default tool dir is under AppData\Roaming, which the
+    # packaged Claude app redirects to another drive, so tools go to ~\.uv-tools (2026-11-19).
+    if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+        Write-Warning 'uv not found: run "winget install astral-sh.uv", then this script again (graphify).'
+    } elseif ($realTarget) {
+        $env:UV_TOOL_DIR = "$env:USERPROFILE\.uv-tools"
+        [Environment]::SetEnvironmentVariable('UV_TOOL_DIR', $env:UV_TOOL_DIR, 'User')
+        [Environment]::SetEnvironmentVariable('GRAPHIFY_QUERY_LOG_DISABLE', '1', 'User')   # no local log of questions
+        uv tool install graphifyy
+    }
 }
 Write-Host 'Done. Restart Claude Code.'
