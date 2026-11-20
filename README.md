@@ -2,7 +2,7 @@
 
 # claude-config
 
-Claude Code 개인 설정 묶음. 다른 컴퓨터에 같은 환경을 만든다.
+AI 코딩 에이전트 개인 설정 묶음. 다른 컴퓨터에 같은 환경을 만든다. 에이전트마다 맞춘 폴더가 따로 있다: `claude/`(Claude Code), `codex/`(Codex), `antigravity/`(Antigravity IDE·`agy` CLI). Codex와 Antigravity 설치는 [8절](#8-codex와-antigravity에-설치한다)에 있다.
 
 사이트: https://dawnilove.github.io/claude-config/ (묶음을 누르면 작업 흐름의 어느 단계에 끼어드는지 보인다)
 
@@ -16,19 +16,21 @@ Claude Code 개인 설정 묶음. 다른 컴퓨터에 같은 환경을 만든다
 
 | 경로 | 내용 |
 |---|---|
-| `CLAUDE.md` | 전역 규칙 (언어, 작업 방식, 코드 유지보수 책임, 노력 수준, 선택표 사용) |
-| `docs/` | 규칙의 본문 5개: 노력 수준, 작업 방식, 요약 시스템, 디자인 스킬 선택표, 검토 선택표. 사이트(`index.html`)도 이 폴더에 있다. 설치는 `.md`만 복사한다 |
-| `agents/summarizer.md` | 요약 에이전트 |
-| `skills/stageshow/` | 로컬 스킬 (계정에 올리면 이 사본은 필요 없다) |
-| `skills/design-clash/` | 로컬 스킬. 디자인 스킬 3개로 시안 3개를 따로 만들고 선택기에서 비교한다. 명령: `/design-clash` |
-| `skills/refresh/` | 로컬 스킬. 명령: `/refresh` (로드맵 갱신 → 병렬 진행 → 쓰지 않는 세션 정리 → 결정할 것 보고) |
-| `skills/data-iso/` | 로컬 스킬. 측정 데이터(로봇 경로, 센서 기록)를 등각 기술 도면 SVG와 시간 슬라이더로 그린다. `replay.js`는 anatomy(MIT)에서 가져왔다 (`NOTICE`) |
-| `skills/graphify/` | Graphify-Labs/graphify(Apache-2.0) 스킬의 사본. 코드를 지식 그래프로 만들어 질문한다. `/graphify`로 쓰고, 그래프(`graphify-out/graph.json`)가 있는 프로젝트에서만 자동으로 쓴다(설명 줄만 바꿈, 훅 없음). 본체는 `setup.ps1`이 `uv tool install graphifyy`로 `~\.uv-tools`에 설치한다 |
-| `skills/improve/`, `skills/nothing-design/` | 외부 스킬의 사본 (shadcn/improve, dominikmartn/nothing-design-skill, 둘 다 MIT) |
-| `plugins/` | 내가 만든 플러그인. 앱이 환경 변수로 이 폴더를 직접 읽는다. session-board(오른쪽 패널, 입력창 위 띠, 파일을 깨뜨리는 명령 거부, 비밀 파일 읽기 가드, 하위 에이전트, 결재함), relay-skills(`/handoff`, `/ship`, `/recall`), relay-agents(설계·구현·리뷰 에이전트), superpowers-lite(obra/superpowers의 스킬 4개를 내 방식에 맞춘 사본), humanizer-ko(blader/humanizer의 한국어 판). 결재함 규칙: `docs/통합_작업방식.md` 11절. 자세한 설명은 `plugins/README.md` |
-| `hooks/reminder.txt` | 알림 훅의 문구. 메시지마다 Claude에게 규칙 4개를 알린다 |
+| `claude/CLAUDE.md` | 전역 규칙 (언어, 작업 방식, 코드 유지보수 책임, 노력 수준, 선택표 사용). 모든 판의 원본이다 |
+| `docs/` | 규칙의 본문 5개: 노력 수준, 작업 방식, 요약 시스템, 디자인 스킬 선택표, 검토 선택표. 사이트(`index.html`)도 이 폴더에 있다. 설치는 `.md`만 복사한다 (Claude판만) |
+| `claude/agents/summarizer.md` | 요약 에이전트 |
+| `claude/skills/stageshow/` | 로컬 스킬 (계정에 올리면 이 사본은 필요 없다) |
+| `claude/skills/design-clash/` | 로컬 스킬. 디자인 스킬 3개로 시안 3개를 따로 만들고 선택기에서 비교한다. 명령: `/design-clash` |
+| `claude/skills/refresh/` | 로컬 스킬. 명령: `/refresh` (로드맵 갱신 → 병렬 진행 → 쓰지 않는 세션 정리 → 결정할 것 보고) |
+| `claude/skills/data-iso/` | 로컬 스킬. 측정 데이터(로봇 경로, 센서 기록)를 등각 기술 도면 SVG와 시간 슬라이더로 그린다. `replay.js`는 anatomy(MIT)에서 가져왔다 (`NOTICE`) |
+| `claude/skills/graphify/` | Graphify-Labs/graphify(Apache-2.0) 스킬의 사본. 코드를 지식 그래프로 만들어 질문한다. `/graphify`로 쓰고, 그래프(`graphify-out/graph.json`)가 있는 프로젝트에서만 자동으로 쓴다(설명 줄만 바꿈, 훅 없음). 본체는 `setup.ps1`이 `uv tool install graphifyy`로 `~\.uv-tools`에 설치한다 |
+| `claude/skills/improve/`, `claude/skills/nothing-design/` | 외부 스킬의 사본 (shadcn/improve, dominikmartn/nothing-design-skill, 둘 다 MIT) |
+| `claude/plugins/` | 내가 만든 플러그인. 앱이 환경 변수로 이 폴더를 직접 읽는다. session-board(오른쪽 패널, 입력창 위 띠, 파일을 깨뜨리는 명령 거부, 비밀 파일 읽기 가드, 하위 에이전트, 결재함), relay-skills(`/handoff`, `/ship`, `/recall`), relay-agents(설계·구현·리뷰 에이전트), superpowers-lite(obra/superpowers의 스킬 4개를 내 방식에 맞춘 사본), humanizer-ko(blader/humanizer의 한국어 판). 결재함 규칙: `docs/통합_작업방식.md` 11절. 자세한 설명은 `claude/plugins/README.md` |
+| `claude/hooks/reminder.txt` | 알림 훅의 문구. 메시지마다 Claude에게 규칙 4개를 알린다 |
+| `codex/` | Codex판: `AGENTS.md`, 하위 에이전트 4개(`agents/*.toml`), 위험 명령 승인 규칙(`rules/`), 알림 훅 문구, 같이 쓰는 스킬 목록(`skills.txt`) |
+| `antigravity/` | Antigravity판: `AGENTS.md`, 하위 에이전트 4개(`agents/*.md`), 알림 훅(`hooks/reminder.ps1`), 같이 쓰는 스킬 목록(`skills.txt`) |
 | `plugins-backup/` | 플러그인 본체의 사본 (`ponytail`, `egm`, `frontend-design`). 백업용이다. 설치는 명령으로 한다. 설치된 판보다 낡을 수 있다 |
-| `setup.ps1` | 설치 스크립트 |
+| `setup.ps1` | 설치 스크립트. `-Agent claude`(기본) / `codex` / `antigravity` |
 
 ## 2. 새 컴퓨터에 설치한다 (처음 1번)
 
@@ -116,11 +118,11 @@ git -C "$env:USERPROFILE\claude-config" pull; powershell -ExecutionPolicy Bypass
 ```powershell
 $c="$env:USERPROFILE\.claude"; $r="$env:USERPROFILE\claude-config"
 git -C $r pull --rebase
-Copy-Item "$c\CLAUDE.md" $r -Force
+Copy-Item "$c\CLAUDE.md" "$r\claude" -Force
 Copy-Item "$c\docs\*" "$r\docs" -Force
-Copy-Item "$c\agents\*" "$r\agents" -Force
-Copy-Item "$c\hooks\reminder.txt" "$r\hooks" -Force
-foreach ($s in 'design-clash', 'refresh', 'data-iso', 'graphify') { Copy-Item "$c\skills\$s" "$r\skills" -Recurse -Force }
+Copy-Item "$c\agents\*" "$r\claude\agents" -Force
+Copy-Item "$c\hooks\reminder.txt" "$r\claude\hooks" -Force
+foreach ($s in 'design-clash', 'refresh', 'data-iso', 'graphify') { Copy-Item "$c\skills\$s" "$r\claude\skills" -Recurse -Force }
 git -C $r add -A
 git -C $r commit -m "설정 갱신"
 git -C $r push
@@ -131,8 +133,10 @@ git -C $r push
 4-2와 같다. 3번째 줄만 다르다.
 
 ```powershell
-Copy-Item "$c\CLAUDE.shared.md" "$r\CLAUDE.md" -Force
+Copy-Item "$c\CLAUDE.shared.md" "$r\claude\CLAUDE.md" -Force
 ```
+
+규칙을 바꾸면 `codex/AGENTS.md`와 `antigravity/AGENTS.md`에도 같은 내용을 반영한다. 세 파일은 자동으로 맞춰지지 않는다.
 
 ### 4-4. Claude에게 시킨다
 
@@ -167,3 +171,30 @@ Claude Code에 "전역 설정을 claude-config 저장소에 올려 줘"라고 �
 | 규칙이 적용되지 않는다 | Claude Code를 다시 시작한다. 규칙은 새 세션부터 적용된다 |
 | 알림이 들어오지 않는다 | `settings.json`의 `hooks.UserPromptSubmit`에 `reminder.txt`를 읽는 명령이 있는지 확인한다. 없으면 `setup.ps1 -SkipPlugins`를 다시 실행한다 |
 | 플러그인 설치가 실패한다 | `claude` 명령이 있는지 확인한다. 본체의 사본은 `plugins-backup/`에 있다 |
+
+## 8. Codex와 Antigravity에 설치한다
+
+저장소가 이미 있으면 받기 단계를 건너뛴다. 에이전트마다 명령 1줄이다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\claude-config\setup.ps1" -Agent codex
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\claude-config\setup.ps1" -Agent antigravity
+```
+
+| 넣는 것 | Codex | Antigravity |
+|---|---|---|
+| 전역 규칙 | `~/.codex/AGENTS.md` | `~/.gemini/config/AGENTS.md` |
+| 하위 에이전트 4개 (summarizer, relay-design·build·review) | `~/.codex/agents/*.toml` | `~/.gemini/config/agents/*.md` |
+| 스킬 12개 (`skills.txt`의 목록, `claude/`에서 복사) | `~/.agents/skills/` | `~/.gemini/config/skills/` |
+| 알림 훅 | `~/.codex/hooks.json`의 `UserPromptSubmit` | `~/.gemini/config/hooks.json`의 `claude-config-reminder` (`PreInvocation`, 턴의 첫 호출에만) |
+| 위험 명령 승인 | `~/.codex/rules/claude-config.rules` | 규칙 파일이 없다. `AGENTS.md`의 지시로만 묻는다 |
+| graphify 본체 | `uv tool install graphifyy` | 같음 |
+
+- 그 컴퓨터만의 `AGENTS.md`가 있으면 `AGENTS.md.bak-setup`으로 남기고 덮어쓴다. 남긴 파일의 규칙은 손으로 합친다.
+- `hooks.json`의 다른 훅은 그대로 둔다. 고치기 전에 `hooks.json.bak-setup`을 남긴다.
+- Codex: 설치 뒤 Codex에서 `/hooks`를 1번 열고 알림 훅을 신뢰한다. 신뢰하기 전에는 훅이 돌지 않는다.
+- 빠진 것: session-board(Claude 데스크톱 앱 전용), `/recall`(Claude 대화 기록 전용), `/refresh`(Claude 하위 세션 전용), `/design-clash`(Claude 디자인 스킬 필요), ponytail·egm 같은 Claude 마켓 플러그인.
+- 되돌리기: 위 표의 파일을 지운다. `*.bak-setup`이 있으면 원래 이름으로 되돌린다.

@@ -1,0 +1,5 @@
+# Ask before risky delete/git commands (same list as the Claude Code ask rules, 2026-11-19 decision).
+prefix_rule(pattern = ["rm", ["-rf", "-fr", "-r"]], decision = "prompt", justification = "Recursive delete", match = ["rm -rf build"], not_match = ["rm file.txt"])
+prefix_rule(pattern = ["git", "reset", "--hard"], decision = "prompt", justification = "Discards local changes")
+prefix_rule(pattern = ["git", "clean"], decision = "prompt", justification = "Deletes untracked files")
+prefix_rule(pattern = ["git", "push", ["--force", "-f"]], decision = "prompt", justification = "Rewrites remote history", match = ["git push --force origin main", "git push -f"], not_match = ["git push origin main"])

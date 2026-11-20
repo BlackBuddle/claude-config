@@ -18,7 +18,11 @@ claude-config의 진행과 "나중에" 항목. 결정의 원문은 `docs/결정_
 - [ ] graphify: 프로젝트 1개에서 `/graphify .`를 써 본다. 쓸모가 있으면 그 프로젝트에만 `graphify hook install`(커밋 때 다시 만들기)을 켠다. Claude Code 훅(`graphify claude install`)은 쓰지 않는다
 - [x] 앱 권한 `ask` 규칙: auto 모드에서도 승인 창이 1개만 뜬다. 묶음 명령(`S=… && rm -rf $S`)도 걸린다 (2026-11-19)
 - [ ] 띠의 노력 수준 알약, 컨텍스트 50% 이상의 `인계 ▸`, 비밀 파일 가드, 새 스킬(`/recall`, superpowers-lite, humanizer-ko)
-- [ ] 다른 PC: README 3절의 갱신 명령 실행 (플러그인 폴더가 `plugins/`로 옮겨졌다)
+- [ ] 다른 PC: README 3절의 갱신 명령 실행 (플러그인 폴더가 `claude/plugins/`로 옮겨졌다, 2026-11-19)
+- [x] Codex판·Antigravity판: 시험 폴더에서 규칙·하위 에이전트 4개·스킬을 읽는다. Antigravity 알림 훅이 들어간다. Codex 승인 규칙이 위험 명령에 `prompt`를 낸다 (2026-11-19)
+- [ ] Codex 알림 훅: 실제 설치 뒤 `/hooks`에서 신뢰하고 알림이 들어오는지 본다 (시험 못 함: 신뢰가 대화형이다)
+- [ ] 이 PC에 Codex판·Antigravity판을 실제로 설치한다 (README 8절)
+- [ ] 이 PC의 `CLAUDE_CODE_PLUGIN_DIRS`를 `claude\plugins`로 바꾼다 (`setup.ps1 -SkipPlugins`가 바꾼다). 바꾸기 전에 앱을 다시 시작하면 내 플러그인이 빠진다
 
 ## 마감이 있는 일
 

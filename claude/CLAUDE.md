@@ -16,6 +16,7 @@
 - Large tasks: plan, get approval, then execute. When the user answers by number (e.g. "1. yes 2. exclude"), apply each item exactly
 - After work, summarize: changed files, how to run, what was verified vs. not. Use clickable file links
 - Errors: cause, fix, then verification. State "unverified" if not verified
+- 화면 조작 (2026-11-17 user instruction): 실제 마우스·키보드를 흉내 내거나(user32 SetCursorPos·mouse_event·SendInput, 창 닫기·앞으로 가져오기 등) 사용자 화면을 캡처하기 전에 반드시 먼저 묻는다. 컴퓨터 유즈 도구가 없어도 같다. 묻지 않은 시험은 테스트 코드, 로그, 내장 브라우저 창 안에서만 한다
 
 ## Coding
 - 언어: 기존 프로젝트는 그 프로젝트의 언어를 따른다. 새 프로젝트는 작업 종류로 고르고 프로젝트 CLAUDE.md에 쓴다: AI·데이터·도구 = Python, ROS2 노드 = Python (고주기·실시간 제어는 C++), 펌웨어 = C, 데스크톱 화면 = PyQt. 정할 수 없으면 Python이다. 고를 때 추천 1개와 이유를 쓴다. 성능이 최우선이면 다시 검토하고 근거를 댄다
@@ -67,6 +68,7 @@
 - Show the session plan and the needed effort level in one message; one "변경함" approves both
 - Same problem fails 3 times → stop and present options. New ideas go to ROADMAP's parking lot, not straight into scope
 - Before working in a folder another session may be editing, check for it and coordinate via HANDOFF/ROADMAP instead of editing the same files at once
+- 동시 하위 세션 (2026-11-17 사용자 결정, 모든 프로젝트): 기본 3개다. 아래 조건을 모두 지키면 총괄이 상황에 따라 4 ~ 5개까지 연다. ① 늘어나는 세션은 공유 장비(학습 PC 등)를 쓰지 않는다. 공유 장비를 쓰는 세션은 그 장비의 슬롯 수까지다 (슬롯 수는 프로젝트 문서에 쓴다) ② 늘어나는 세션은 다른 세션과 같은 파일을 고치지 않는다 ③ 결재 대기가 2개 이하다 ④ 사용자가 자는 동안에는 3개를 넘기지 않는다. 4개 이상으로 열 때는 `확인:` 줄로 이유를 1줄 알린다
 
 ## 결재함 (global, 2026-11-15 user instruction, 판 2; full text: `~/.claude/docs/통합_작업방식.md` 11절)
 - 결재함은 사용자를 기다리는 세션을 모아 보인다. mod가 대화에서 칸을 뽑는다. 결정 파일을 쓰거나 지우지 않는다

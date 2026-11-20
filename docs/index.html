@@ -127,11 +127,11 @@ code { font-family: var(--font-outlier); font-size: 0.92em; }
       <fieldset>
         <legend>묶음을 고릅니다</legend>
         <div class="bundles">
-          <label><input type="radio" name="bundle" value="rules" data-stop="1" data-file="CLAUDE.md" data-note="세션이 시작될 때 읽힙니다. 언어, 작업 방식, 노력 수준 같은 모든 답의 바탕 규칙입니다."><span class="name">전역 규칙</span><span class="path">CLAUDE.md</span></label>
-          <label><input type="radio" name="bundle" value="hook" data-stop="2" data-file="hooks/reminder.txt" data-note="메시지를 보낼 때마다 실행됩니다. 규칙 4개(선택표, 요약, 검토, 한국어)를 Claude에게 다시 알립니다." checked><span class="name">알림 훅</span><span class="path">hooks/</span></label>
+          <label><input type="radio" name="bundle" value="rules" data-stop="1" data-file="claude/CLAUDE.md" data-note="세션이 시작될 때 읽힙니다. 언어, 작업 방식, 노력 수준 같은 모든 답의 바탕 규칙입니다."><span class="name">전역 규칙</span><span class="path">CLAUDE.md</span></label>
+          <label><input type="radio" name="bundle" value="hook" data-stop="2" data-file="claude/hooks/reminder.txt" data-note="메시지를 보낼 때마다 실행됩니다. 규칙 4개(선택표, 요약, 검토, 한국어)를 Claude에게 다시 알립니다." checked><span class="name">알림 훅</span><span class="path">hooks/</span></label>
           <label><input type="radio" name="bundle" value="design-table" data-stop="3" data-file="docs/디자인_스킬_선택표.md" data-note="디자인 요청이 오면 이 표로 스킬 1개를 고릅니다. 기억으로 고르지 않습니다."><span class="name">디자인 선택표</span><span class="path">docs/</span></label>
-          <label><input type="radio" name="bundle" value="clash" data-stop="3" data-file="skills/design-clash/SKILL.md" data-note="큰 디자인 작업에서 스킬 3개로 시안 3개를 만들고, 선택기에서 비교해 1개를 고릅니다."><span class="name">design-clash</span><span class="path">skills/</span></label>
-          <label><input type="radio" name="bundle" value="summarizer" data-stop="4" data-file="agents/summarizer.md" data-note="300줄이 넘는 파일이나 로그를 Haiku 하위 에이전트가 읽고 결론만 돌려줍니다."><span class="name">요약 에이전트</span><span class="path">agents/</span></label>
+          <label><input type="radio" name="bundle" value="clash" data-stop="3" data-file="claude/skills/design-clash/SKILL.md" data-note="큰 디자인 작업에서 스킬 3개로 시안 3개를 만들고, 선택기에서 비교해 1개를 고릅니다."><span class="name">design-clash</span><span class="path">skills/</span></label>
+          <label><input type="radio" name="bundle" value="summarizer" data-stop="4" data-file="claude/agents/summarizer.md" data-note="300줄이 넘는 파일이나 로그를 Haiku 하위 에이전트가 읽고 결론만 돌려줍니다."><span class="name">요약 에이전트</span><span class="path">agents/</span></label>
           <label><input type="radio" name="bundle" value="review-table" data-stop="5" data-file="docs/검토_선택표.md" data-note="작업이 끝나면 이 표로 검토 명령 1개를 제안합니다. 사용자가 승인한 뒤 실행합니다."><span class="name">검토 선택표</span><span class="path">docs/</span></label>
         </div>
       </fieldset>
@@ -142,7 +142,7 @@ code { font-family: var(--font-outlier); font-size: 0.92em; }
         <li>하위 에이전트</li>
         <li>검토 제안</li>
       </ol>
-      <output class="note" aria-live="polite"><span id="note-text">2단계 훅 알림. 메시지를 보낼 때마다 실행됩니다. 규칙 4개(선택표, 요약, 검토, 한국어)를 Claude에게 다시 알립니다.</span><br><a id="note-link" href="https://github.com/Dawnilove/claude-config/blob/main/hooks/reminder.txt">hooks/reminder.txt</a></output>
+      <output class="note" aria-live="polite"><span id="note-text">2단계 훅 알림. 메시지를 보낼 때마다 실행됩니다. 규칙 4개(선택표, 요약, 검토, 한국어)를 Claude에게 다시 알립니다.</span><br><a id="note-link" href="https://github.com/Dawnilove/claude-config/blob/main/claude/hooks/reminder.txt">claude/hooks/reminder.txt</a></output>
     </div>
   </div>
 </header>
@@ -178,12 +178,14 @@ code { font-family: var(--font-outlier); font-size: 0.92em; }
     <div class="container split">
       <h2>들어 있는 것</h2>
       <dl class="index">
-        <div><dt><a href="https://github.com/Dawnilove/claude-config/blob/main/CLAUDE.md">CLAUDE.md</a></dt><dd>전역 규칙</dd></div>
+        <div><dt><a href="https://github.com/Dawnilove/claude-config/blob/main/claude/CLAUDE.md">claude/CLAUDE.md</a></dt><dd>전역 규칙</dd></div>
         <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/docs">docs/</a></dt><dd>규칙 본문과 선택표 2개</dd></div>
-        <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/agents">agents/</a></dt><dd>요약 에이전트</dd></div>
-        <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/skills">skills/</a></dt><dd>design-clash, stageshow 등 로컬 스킬</dd></div>
-        <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/hooks">hooks/</a></dt><dd>알림 훅의 문구</dd></div>
-        <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/plugins">plugins/</a></dt><dd>session-board, relay-skills 등 직접 만든 플러그인</dd></div>
+        <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/claude/agents">claude/agents/</a></dt><dd>요약 에이전트</dd></div>
+        <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/claude/skills">claude/skills/</a></dt><dd>design-clash, stageshow 등 로컬 스킬</dd></div>
+        <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/claude/hooks">claude/hooks/</a></dt><dd>알림 훅의 문구</dd></div>
+        <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/claude/plugins">claude/plugins/</a></dt><dd>session-board, relay-skills 등 직접 만든 플러그인</dd></div>
+        <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/codex">codex/</a></dt><dd>Codex판 (AGENTS.md, 하위 에이전트, 승인 규칙)</dd></div>
+        <div><dt><a href="https://github.com/Dawnilove/claude-config/tree/main/antigravity">antigravity/</a></dt><dd>Antigravity판 (AGENTS.md, 하위 에이전트, 알림 훅)</dd></div>
       </dl>
     </div>
   </section>
@@ -194,7 +196,7 @@ code { font-family: var(--font-outlier); font-size: 0.92em; }
   <ul>
     <li><a href="https://github.com/Dawnilove/claude-config#readme">저장소 안내</a></li>
     <li><a href="https://github.com/Dawnilove/claude-config/blob/main/setup.ps1">setup.ps1</a></li>
-    <li><a href="https://github.com/Dawnilove/claude-config/blob/main/plugins/README.md">plugins/README.md</a></li>
+    <li><a href="https://github.com/Dawnilove/claude-config/blob/main/claude/plugins/README.md">claude/plugins/README.md</a></li>
   </ul>
 </footer>
 

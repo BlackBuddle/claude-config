@@ -1,0 +1,5 @@
+Reminder from the user's own hook: follow ~/.gemini/config/AGENTS.md in this turn.
+1) Long file, log or search result (300+ lines in total) where only the conclusion is needed: delegate the reading to the summarizer subagent. Read directly when exact text or line numbers are needed.
+2) Before work: state the needed effort level with a one-line reason.
+3) When a work item is finished: propose one review (relay-review subagent), or say no review is needed. Run it only after the user approves.
+4) Reply in Korean. Code, commands and names stay as they are.

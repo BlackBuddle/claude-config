@@ -1,0 +1,14 @@
+# Skills copied from claude/ unchanged (they use no Claude-only tool). One path per line, relative to claude/.
+# Left out on purpose: design-clash (needs Claude design skills), refresh (Claude sub-sessions), recall (Claude transcripts).
+skills/data-iso
+skills/graphify
+skills/improve
+skills/nothing-design
+skills/stageshow
+plugins/humanizer-ko/skills/humanizer-ko
+plugins/relay-skills/skills/handoff
+plugins/relay-skills/skills/ship
+plugins/superpowers-lite/skills/brainstorming
+plugins/superpowers-lite/skills/systematic-debugging
+plugins/superpowers-lite/skills/test-driven-development
+plugins/superpowers-lite/skills/verification-before-completion
