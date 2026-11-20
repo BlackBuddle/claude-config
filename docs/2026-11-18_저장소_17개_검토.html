@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>저장소 17개 검토</title>
+<style>
+:root{--bg:#f7f7f5;--card:#fff;--ink:#1d1d1f;--dim:#666;--line:#ddd;--ok:#1a7f37;--mid:#9a6700;--no:#b42318;--abs:#3451b2;--chip:#eef}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17181a;--card:#222326;--ink:#ececec;--dim:#a0a0a0;--line:#3a3b3f;--ok:#4ac26b;--mid:#d4a72c;--no:#f47067;--abs:#8ca2ff;--chip:#2c2f45}}
+:root[data-theme="dark"]{--bg:#17181a;--card:#222326;--ink:#ececec;--dim:#a0a0a0;--line:#3a3b3f;--ok:#4ac26b;--mid:#d4a72c;--no:#f47067;--abs:#8ca2ff;--chip:#2c2f45}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 "Pretendard","Malgun Gothic",system-ui,sans-serif}
+main{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:24px;margin:0 0 4px}h2{font-size:19px;margin:36px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.sub{color:var(--dim);margin:0 0 16px}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:14px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{background:var(--chip)}
+.wrap{overflow-x:auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:12px 0}
+.card h3{margin:0 0 2px;font-size:17px}.card h3 a{color:inherit}
+.meta{color:var(--dim);font-size:13px;margin-bottom:8px}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:1px 8px;border-radius:99px;margin-left:6px;color:#fff;vertical-align:2px}
+.t-ok{background:var(--ok)}.t-mid{background:var(--mid)}.t-no{background:var(--no)}.t-abs{background:var(--abs)}
+dl{display:grid;grid-template-columns:120px 1fr;gap:4px 12px;margin:0}
+dt{color:var(--dim);font-weight:600}dd{margin:0}
+@media (max-width:600px){dl{grid-template-columns:1fr}dt{margin-top:6px}}
+ul{margin:4px 0;padding-left:20px}
+.note{font-size:13px;color:var(--dim)}
+</style>
+</head>
+<body><main>
+<h1>저장소 17개 검토</h1>
+<p class="sub">기준: 토큰 비용, 기존 체계(PLAN·EGM·ponytail·노력 수준 규칙·결재함·relay·선택표)와의 충돌, 외부 전송, Windows, <code>claude-config</code>에 넣기 쉬운가. 근거는 README다. 소스 코드는 읽지 않았다. 2026-11-18 기준.</p>
+
+<h2>1. 결론</h2>
+<div class="wrap"><table>
+<tr><th>판단</th><th>저장소</th><th>처리</th></tr>
+<tr><td><span class="tag t-ok">설치</span></td><td>shadcn/improve, nothing-design-skill</td><td>시험 설치 → 선택표에 1칸씩 추가 → <code>setup.ps1</code>에 1줄씩 추가</td></tr>
+<tr><td><span class="tag t-mid">조건부</span></td><td>openai/codex-plugin-cc</td><td>ChatGPT 계정이 있으면 "다른 회사 모델의 반대 검토"로만 쓴다</td></tr>
+<tr><td><span class="tag t-abs">흡수</span></td><td>effortless, superpowers, gsd-core, gstack, claude-mem, hindsight, caveman, humanizer</td><td>설치하지 않는다. 아이디어만 내 도구(session-board, relay-skills, docs)에 넣는다</td></tr>
+<tr><td><span class="tag t-no">제외</span></td><td>ruflo, frontend-slides, Claude-BugHunter</td><td>쓰지 않는다</td></tr>
+<tr><td><span class="tag t-no">config 밖</span></td><td>harness2, paper-orchestra, minimind</td><td>Claude Code 도구가 아니다. 필요하면 별도 프로젝트 폴더로 받는다</td></tr>
+</table></div>
+
+<h2>2. 흡수안: 막은 저장소의 아이디어로 내 기능을 고친다</h2>
+<p>설치하면 상시 비용과 규칙 충돌이 생긴다. 아이디어만 가져오면 둘 다 없다. 내 도구는 내가 고칠 수 있고 저장소 1곳에서 관리된다.</p>
+<div class="wrap"><table>
+<tr><th>#</th><th>아이디어 (출처)</th><th>넣을 곳</th><th>기대 효과</th><th>크기</th></tr>
+<tr><td>1</td><td>노력 수준 <b>제안</b> 표시 (effortless). 자동 변경은 하지 않는다</td><td>session-board 띠</td><td>"필요한 수준"과 "지금 수준"이 다르면 띠에 노란 점. 매번 get_session·알림 줄을 쓰는 수고가 준다</td><td>중</td></tr>
+<tr><td>2</td><td>띠의 Compact / Handoff 단추 (effortless)</td><td>session-board 띠</td><td>컨텍스트가 차면 단추 1번으로 <code>/handoff</code>. 세션을 짧게 끊는 규칙을 지키기 쉽다</td><td>소</td></tr>
+<tr><td>3</td><td>구현 전 실패 테스트 1개 (superpowers TDD)</td><td><code>docs/통합_작업방식.md</code> 1줄, relay-build 지시문</td><td>"완료" 주장의 근거가 생긴다. relay-review가 확인할 대상이 분명해진다</td><td>소</td></tr>
+<tr><td>4</td><td>계획 전 브레인스토밍 질문 3개 (superpowers, gstack office-hours)</td><td>relay-design 지시문</td><td>PLAN.md를 쓰기 전에 목적·제약·대안을 묻는다. EGM 지적이 줄어든다</td><td>소</td></tr>
+<tr><td>5</td><td>비밀 파일 읽기 가드 (gsd-core PreToolUse)</td><td>session-board guard</td><td><code>.env</code>, <code>.credentials.json</code>, <code>.claude.json</code> 읽기·출력을 확인 카드로 막는다. 이미 있는 위험 명령 가드에 규칙만 더한다</td><td>소</td></tr>
+<tr><td>6</td><td>출하 점검표 <code>/ship</code> (gstack)</td><td>relay-skills 새 스킬</td><td>커밋 전 테스트·린트·결정 기록·README·pull 확인을 1번에 한다. 이번 세션의 충돌(먼저 pull 안 함)을 막는다</td><td>소</td></tr>
+<tr><td>7</td><td>단계적 기억 찾기: 색인 먼저, 내용은 필요할 때 (claude-mem, hindsight)</td><td>relay-skills 새 스킬 <code>/recall</code></td><td>여러 프로젝트의 <code>docs/결정_기록.md</code>·HANDOFF를 로컬에서 검색한다. 외부 전송이 없다. "그거 없애기로 했잖아" 같은 확인이 빨라진다</td><td>중</td></tr>
+<tr><td>8</td><td>한국어 AI 글투 점검표 (humanizer)</td><td><code>docs/</code> 또는 스킬 1개</td><td>번역투, 과한 수식, "~하는 것이다" 반복을 STE 규칙과 함께 점검한다. README·보고서 품질이 오른다</td><td>소</td></tr>
+<tr><td>9</td><td>긴 로그 압축 읽기 (caveman Read less)</td><td>이미 있음: summarizer</td><td>새로 만들 것이 없다. 300줄 규칙을 그대로 쓴다</td><td>없음</td></tr>
+</table></div>
+<p class="note">추천 순서: 6 → 5 → 3 → 2 → 7 → 1. 6·5는 이번 세션에서 실제로 난 문제(pull 누락, 비밀 파일)를 막는다. 1은 판정 규칙을 정해야 해서 마지막이다.</p>
+
+<h2>3. 저장소별 상세</h2>
+
+<div class="card"><h3><a href="https://github.com/shadcn/improve">shadcn/improve</a><span class="tag t-ok">설치</span></h3>
+<div class="meta">스킬 · 호출할 때만 · MIT · 최근 커밋 2026-09-12</div><dl>
+<dt>설명</dt><dd>코드베이스를 감사한다. 발견을 우선순위로 정리하고 "다른 에이전트가 실행할 구현 계획"을 <code>plans/</code>에 쓴다. 스스로 구현하지 않는다.</dd>
+<dt>장점</dt><dd>상시 비용이 없다. 비싼 모델은 계획, 싼 모델은 실행이라는 구조가 분명하다. quick·deep·security 모드가 있다.</dd>
+<dt>단점</dt><dd>감사 1번에 하위 에이전트 9개가 돈다. 1회 토큰이 크다. <code>--issues</code>는 GitHub에 게시한다. Windows는 확인하지 못했다.</dd>
+<dt>나에게 장점</dt><dd>relay-design(계획) → relay-build(실행) 흐름과 같다. 결과가 파일이라 "문서가 기억을 맡는다" 규칙과 맞는다.</dd>
+<dt>나에게 단점</dt><dd><code>/ponytail-audit</code>와 역할이 겹친다. 둘 다 두면 선택표가 복잡해진다.</dd>
+<dt>기대 효과</dt><dd>큰 저장소(벗, Auraji)의 정리 작업을 계획 파일로 쪼개 하위 세션에 넘기기 쉽다.</dd>
+<dt>대체 가능</dt><dd><code>/ponytail-audit</code> (보고서만, 계획 파일 없음).</dd>
+<dt>추천</dt><dd>설치. 1달 써 보고 ponytail-audit과 하나만 선택표에 남긴다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/dominikmartn/nothing-design-skill">dominikmartn/nothing-design-skill</a><span class="tag t-ok">설치</span></h3>
+<div class="meta">스킬 · 호출할 때만 · MIT · 2026-11-10</div><dl>
+<dt>설명</dt><dd>Nothing 브랜드 풍(흑백, 타이포 중심, 산업적) UI를 만든다. HTML/CSS, React, SwiftUI 출력.</dd>
+<dt>장점</dt><dd>파일 4개. 의존이 없다. 결과 스타일이 뚜렷하다.</dd>
+<dt>단점</dt><dd>한 가지 스타일만 낸다. 설치가 수동 복사다.</dd>
+<dt>나에게 장점</dt><dd>로봇 대시보드·PyQt 화면 시안에 맞는 "장비 같은" 톤이다. design-clash의 후보 스킬로 쓸 수 있다.</dd>
+<dt>나에게 단점</dt><dd>PyQt 출력은 없다. 웹 시안을 보고 손으로 옮겨야 한다.</dd>
+<dt>기대 효과</dt><dd>디자인 선택표에 "흑백·산업풍" 칸 1개가 생긴다.</dd>
+<dt>대체 가능</dt><dd>impeccable, design-taste-frontend (스타일 지정 시).</dd>
+<dt>추천</dt><dd>설치. <code>skills/</code>에 사본을 두고 <code>setup.ps1</code>이 복사한다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/openai/codex-plugin-cc">openai/codex-plugin-cc</a><span class="tag t-mid">조건부</span></h3>
+<div class="meta">플러그인 · 호출할 때만 (review gate 제외) · Apache-2.0 · 2026-07-08</div><dl>
+<dt>설명</dt><dd>Claude Code 안에서 OpenAI Codex로 리뷰(<code>/codex:review</code>, <code>/codex:adversarial-review</code>)와 작업 위임(<code>/codex:rescue</code>)을 한다.</dd>
+<dt>장점</dt><dd>다른 회사 모델의 시각이다. 같은 모델끼리 검토할 때 생기는 맹점을 줄인다.</dd>
+<dt>단점</dt><dd>코드와 diff가 OpenAI로 간다. Node, Codex CLI, ChatGPT 계정이 필요하다. 4개월 동안 갱신이 없다. review gate를 켜면 사용량이 빠르게 준다.</dd>
+<dt>나에게 장점</dt><dd>EGM·relay-review가 놓치는 부분을 잡을 수 있다.</dd>
+<dt>나에게 단점</dt><dd>비용과 계정이 1개 더 든다. 수업 과제 코드라면 외부 전송이 문제될 수 있다.</dd>
+<dt>기대 효과</dt><dd>중요한 PR(공개 판, 릴리스) 직전 1회 검토.</dd>
+<dt>대체 가능</dt><dd>relay-review, <code>/code-review high</code>.</dd>
+<dt>추천</dt><dd>ChatGPT 계정이 있을 때만. 검토 선택표의 "릴리스 직전" 칸에만 둔다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/HeyCubit/effortless">HeyCubit/effortless</a><span class="tag t-abs">흡수</span></h3>
+<div class="meta">모드 · 매 프롬프트 · MIT · 2026-10-23 · 별 351</div><dl>
+<dt>설명</dt><dd>매 프롬프트마다 Haiku가 노력 수준을 골라 자동 적용한다. 띠에 컨텍스트, 캐시 남은 시간, Compact/Handoff 단추를 보인다.</dd>
+<dt>장점</dt><dd>비용 21% 감소를 주장한다(저자 측정, 표본 4개). 짧은 "ok"는 수준을 유지한다.</dd>
+<dt>단점</dt><dd>판정 호출이 매번 든다. 프롬프트가 판정기로 간다. 표본이 작다. 사용자가 적다.</dd>
+<dt>나에게 장점</dt><dd>노력 수준 변경 요청·"변경함" 왕복이 없어진다.</dd>
+<dt>나에게 단점</dt><dd>"노력 수준은 사용자만 바꾼다" 규칙과 정면으로 충돌한다. 띠가 session-board 띠와 겹친다.</dd>
+<dt>기대 효과 (흡수)</dt><dd>흡수안 1·2. 제안만 띠에 보이고 변경은 사용자가 한다.</dd>
+<dt>대체 가능</dt><dd>session-board 띠 (컨텍스트·캐시는 이미 있다).</dd>
+<dt>추천</dt><dd>설치하지 않는다. 규칙을 바꾸고 싶으면 이것이 유일한 대안이다. 그때는 규칙부터 결재로 바꾼다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/obra/superpowers">obra/superpowers</a><span class="tag t-abs">흡수</span></h3>
+<div class="meta">플러그인 · 매 세션 주입 · MIT · 2026-11-03 · 별 319k</div><dl>
+<dt>설명</dt><dd>개발 방법론 스킬 묶음. 브레인스토밍 → 설계 승인 → 계획 → TDD → 하위 에이전트 개발 → 리뷰 → 브랜치 마무리.</dd>
+<dt>장점</dt><dd>가장 많이 쓰인다. 외부 의존이 없다. 절차가 검증되어 있다.</dd>
+<dt>단점</dt><dd>SessionStart 훅이 매 세션 지시를 넣는다. 자율 실행을 길게 돌려 총 토큰이 늘기 쉽다.</dd>
+<dt>나에게 장점</dt><dd>TDD와 브레인스토밍 단계는 내 체계에 없다.</dd>
+<dt>나에게 단점</dt><dd>내 PLAN·EGM·HANDOFF·relay와 같은 일을 다른 규칙으로 한다. 두 지시가 부딪힌다.</dd>
+<dt>기대 효과 (흡수)</dt><dd>흡수안 3·4. 규칙 2줄로 핵심만 얻는다.</dd>
+<dt>대체 가능</dt><dd>통합_작업방식 + relay 에이전트 + EGM.</dd>
+<dt>추천</dt><dd>설치하지 않는다. TDD·브레인스토밍 단계만 가져온다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/open-gsd/gsd-core">open-gsd/gsd-core</a><span class="tag t-abs">흡수</span></h3>
+<div class="meta">명령·에이전트·훅 · 상시 훅 6종 · MIT · 2026-11-18</div><dl>
+<dt>설명</dt><dd>Discuss → Plan → Execute → Verify → Ship 루프. 무거운 일은 새 컨텍스트의 하위 에이전트가 맡는다.</dd>
+<dt>장점</dt><dd>컨텍스트 부패를 줄이는 설계. 시크릿·커밋 가드 훅이 있다.</dd>
+<dt>단점</dt><dd><code>~/.claude</code>에 훅 6종을 심는다. <code>.planning/</code> 산출물이 늘어난다.</dd>
+<dt>나에게 장점</dt><dd>시크릿 가드가 필요하다.</dd>
+<dt>나에게 단점</dt><dd>루프 자체는 내 체계와 같다. 겹친다.</dd>
+<dt>기대 효과 (흡수)</dt><dd>흡수안 5 (비밀 파일 가드).</dd>
+<dt>대체 가능</dt><dd>통합_작업방식, session-board guard.</dd>
+<dt>추천</dt><dd>설치하지 않는다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/garrytan/gstack">garrytan/gstack</a><span class="tag t-abs">흡수</span></h3>
+<div class="meta">스킬 묶음 + 바이너리 + 훅 · 상시 업데이트 확인 · MIT · 2026-11-18 · 별 142k</div><dl>
+<dt>설명</dt><dd>CEO·엔지니어링 매니저·디자이너·QA·보안·릴리스 역할의 명령 약 23개. 번들 브라우저로 QA를 한다.</dd>
+<dt>장점</dt><dd>역할별 점검이 구체적이다. <code>/ship</code>, <code>/qa</code>가 실용적이다.</dd>
+<dt>단점</dt><dd>Windows는 "최소 지원". Smart App Control이 바이너리를 막는 이슈가 있다. 쿠키 복사, stealth 브라우저 기능이 있다.</dd>
+<dt>나에게 장점</dt><dd>출하 점검표가 필요하다.</dd>
+<dt>나에게 단점</dt><dd>설치 부담과 보안 위험이 크다.</dd>
+<dt>기대 효과 (흡수)</dt><dd>흡수안 4·6.</dd>
+<dt>대체 가능</dt><dd>relay 에이전트, 검토 선택표.</dd>
+<dt>추천</dt><dd>설치하지 않는다. <code>/ship</code> 점검 항목만 가져온다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/thedotmack/claude-mem">thedotmack/claude-mem</a><span class="tag t-abs">흡수</span></h3>
+<div class="meta">플러그인 + 로컬 워커 · 매 도구 호출 · Apache-2.0 · 2026-11-18</div><dl>
+<dt>설명</dt><dd>도구 호출을 관찰 노트로 만들고 다음 세션 시작에 압축 색인을 넣는다. 검색은 색인 → 시간순 → 상세 3단계.</dd>
+<dt>장점</dt><dd>세션을 넘는 기억이 자동이다. 단계적 검색으로 주입량을 줄였다.</dd>
+<dt>단점</dt><dd>도구 활동이 관찰자 모델 제공자로 간다. 통계가 기본 켜짐. 관찰자 사용량이 따로 든다. 상시 워커가 뜬다.</dd>
+<dt>나에게 장점</dt><dd>"그거 없애기로 했잖아"를 세션이 스스로 찾는다.</dd>
+<dt>나에게 단점</dt><dd>"기억은 문서가 맡는다" 규칙과 반대다. 매 세션 토큰이 는다. 외부 전송.</dd>
+<dt>기대 효과 (흡수)</dt><dd>흡수안 7. 로컬 문서 검색으로 같은 효과의 대부분을 얻는다.</dd>
+<dt>대체 가능</dt><dd>결정_기록 + HANDOFF + 세션 기록 검색 도구.</dd>
+<dt>추천</dt><dd>설치하지 않는다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/vectorize-io/hindsight">vectorize-io/hindsight</a><span class="tag t-abs">흡수</span></h3>
+<div class="meta">서버(Docker) + 연동 · 상시 · MIT · 2026-11-18 · 별 62k</div><dl>
+<dt>설명</dt><dd>에이전트 장기 기억 서버. 사실을 추출·통합(retain / recall / reflect)한다.</dd>
+<dt>장점</dt><dd>기억 품질이 높다. 로컬 Ollama도 된다.</dd>
+<dt>단점</dt><dd>Docker 서버, LLM 키, Postgres. 무겁다.</dd>
+<dt>나에게 단점</dt><dd>claude-mem과 같은 이유에 서버 운영 부담이 더해진다.</dd>
+<dt>기대 효과 (흡수)</dt><dd>흡수안 7과 같다.</dd>
+<dt>추천</dt><dd>설치하지 않는다. 기억 도구가 꼭 필요해지면 claude-mem보다 이쪽(로컬 Ollama)이 외부 전송을 피할 수 있다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/JuliusBrussee/caveman">JuliusBrussee/caveman</a><span class="tag t-abs">흡수</span></h3>
+<div class="meta">스킬 / 플러그인 / 프록시 · 플러그인은 매 세션 · Apache-2.0 · 2026-11-17 · 별 121k</div><dl>
+<dt>설명</dt><dd>답을 짧게 만드는 말투 스킬에서 시작했다. 지금은 입력 압축, 모델 자동 선택, 낭비 분석까지 있다.</dd>
+<dt>장점</dt><dd>입력 33% 감소를 주장한다(자체 측정). Windows 설치를 명시했다.</dd>
+<dt>단점</dt><dd>스킬만으로는 3% 절감이라고 README가 인정한다. 전체판은 프록시가 요청 경로에 끼고, 통계가 기본 켜짐, Auto는 클라우드로 보낸다.</dd>
+<dt>나에게 단점</dt><dd>ponytail + STE 규칙이 이미 짧게 쓰게 한다. 겹친다.</dd>
+<dt>기대 효과 (흡수)</dt><dd>흡수안 9. 이미 summarizer가 있다.</dd>
+<dt>대체 가능</dt><dd>ponytail, summarizer, <code>/ponytail-gain</code>, explain-usage.</dd>
+<dt>추천</dt><dd>설치하지 않는다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/blader/humanizer">blader/humanizer</a><span class="tag t-abs">흡수</span></h3>
+<div class="meta">스킬 · 호출할 때만 · MIT · 2026-11-10 · 별 70k</div><dl>
+<dt>설명</dt><dd>AI 글투 26개 패턴(Wikipedia 기준)을 찾아 사람 글처럼 고친다.</dd>
+<dt>장점</dt><dd>가볍다. 상시 비용이 없다.</dd>
+<dt>단점</dt><dd>영어 패턴 기준이다. 한국어 지원이 명시되지 않았다.</dd>
+<dt>나에게 장점</dt><dd>영어 GitHub 이슈·PR을 쓸 때 쓸모 있다.</dd>
+<dt>나에게 단점</dt><dd>내 글의 대부분은 한국어 STE다.</dd>
+<dt>기대 효과 (흡수)</dt><dd>흡수안 8. 한국어 점검표를 만든다.</dd>
+<dt>추천</dt><dd>영어 글을 자주 쓰면 설치해도 된다(비용 0). 아니면 한국어판만 만든다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/ruvnet/ruflo">ruvnet/ruflo</a><span class="tag t-no">제외</span></h3>
+<div class="meta">메타 하네스 · 훅 27개·데몬·MCP 도구 406개 · MIT · 2026-11-18</div><dl>
+<dt>설명</dt><dd>스웜, 메모리, 학습, 라우팅, 연합을 한 번에 얹는다. 에이전트 98개, 명령 60개 이상.</dd>
+<dt>장점</dt><dd>기능이 가장 많다. 플러그인판(ruflo-core)은 훅이 없다.</dd>
+<dt>단점</dt><dd>범위가 너무 넓다. 무엇이 언제 끼어드는지 파악할 수 없다. <code>curl | bash</code> 설치 경로.</dd>
+<dt>나에게</dt><dd>통제 가능한 작은 도구를 직접 만드는 방향과 반대다. 흡수할 아이디어도 대부분 이미 있다(모델별 배정, 하위 세션).</dd>
+<dt>대체 가능</dt><dd>orchestration(Madang), relay 에이전트.</dd>
+<dt>추천</dt><dd>쓰지 않는다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/zarazhangrui/frontend-slides">zarazhangrui/frontend-slides</a><span class="tag t-no">제외</span></h3>
+<div class="meta">스킬 · 호출할 때만 · MIT · 2026-06-23</div><dl>
+<dt>설명</dt><dd>애니메이션 HTML 슬라이드를 만든다. PPT 변환, PDF, Vercel 배포.</dd>
+<dt>장점</dt><dd>결과가 화려하다.</dd>
+<dt>단점</dt><dd>5개월 갱신이 없다. 스크립트가 <code>.sh</code>다. 배포는 공개 URL이다.</dd>
+<dt>나에게</dt><dd>발표 자료는 이미 있는 도구로 된다.</dd>
+<dt>대체 가능</dt><dd><code>anthropic-skills:slides</code>, Slides 아티팩트, pptx 스킬.</dd>
+<dt>추천</dt><dd>쓰지 않는다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/elementalsouls/Claude-BugHunter">elementalsouls/Claude-BugHunter</a><span class="tag t-no">제외</span></h3>
+<div class="meta">플러그인 · 스킬 83개 · MIT · 2026-11-17</div><dl>
+<dt>설명</dt><dd>버그바운티·레드팀 스킬 83개와 명령 15개.</dd>
+<dt>단점</dt><dd>스킬 설명 83개가 상시 컨텍스트를 차지한다. 공격 도구 성격이라 허가된 대상에만 쓴다.</dd>
+<dt>나에게</dt><dd>지금 과정·프로젝트와 관계가 없다.</dd>
+<dt>대체 가능</dt><dd><code>/security-review</code> (내 코드의 방어 점검).</dd>
+<dt>추천</dt><dd>쓰지 않는다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/google-research/harness2">google-research/harness2</a><span class="tag t-no">config 밖</span></h3>
+<div class="meta">Python 연구 프레임워크 · Linux · Apache-2.0</div><dl>
+<dt>설명</dt><dd>에이전트의 프롬프트·스킬·도구(하네스)를 작업마다 재귀적으로 개선하는 연구 코드.</dd>
+<dt>나에게</dt><dd>Claude Code 도구가 아니다. Windows 미지원. 모델 호출 비용이 크다.</dd>
+<dt>흡수할 생각</dt><dd>"실패를 보고 스킬을 고친다"는 생각은 skill-creator의 평가 기능으로 이미 할 수 있다.</dd>
+<dt>추천</dt><dd>논문으로만 읽는다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/google-research/paper-orchestra">google-research/paper-orchestra</a><span class="tag t-no">config 밖</span></h3>
+<div class="meta">Python · Gemini/OpenAI 키 필요 · Apache-2.0</div><dl>
+<dt>설명</dt><dd>아이디어와 실험 로그로 LaTeX 논문 원고를 만드는 다중 에이전트.</dd>
+<dt>나에게</dt><dd>논문을 쓸 때만 쓸모 있다. 키를 <code>.env</code>에 평문으로 둔다.</dd>
+<dt>추천</dt><dd>논문 작업이 생기면 별도 폴더에서 시험한다.</dd></dl></div>
+
+<div class="card"><h3><a href="https://github.com/jingyaogong/minimind">jingyaogong/minimind</a><span class="tag t-no">config 밖</span></h3>
+<div class="meta">PyTorch 학습 코드 · NVIDIA GPU · Apache-2.0</div><dl>
+<dt>설명</dt><dd>64M 파라미터 LLM을 처음부터 학습한다(사전학습, SFT, LoRA, DPO, GRPO).</dd>
+<dt>나에게 장점</dt><dd>딥러닝 과정의 <b>학습 자료로 좋다</b>. 코드가 작고 단계가 다 있다.</dd>
+<dt>나에게 단점</dt><dd>설정 저장소와 관계가 없다. 학습에는 GPU가 필요하다(학습 PC 사용).</dd>
+<dt>추천</dt><dd>별도 학습 프로젝트로 받는다. venv를 따로 만든다.</dd></dl></div>
+
+<p class="note">확인하지 못한 것: 소스 코드와 훅의 실제 동작, improve·codex-plugin-cc·superpowers의 Windows 동작, humanizer의 한국어 품질.</p>
+</main></body></html>
